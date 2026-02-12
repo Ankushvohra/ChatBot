@@ -29,6 +29,7 @@ const ChatBot = () => {
   const keepPopupOpenRef = useRef(false);
   const isRecordingRef = useRef(false);
   const manualStopRef = useRef(false);
+  const [isWaiting, setIsWaiting] = useState(false);
 
   useEffect(() => {
     keepPopupOpenRef.current = keepPopupOpen;
@@ -37,6 +38,29 @@ const ChatBot = () => {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      setMessages([{ text: "Hi! I am your bot.\nAsk your queries.", sender: 'bot', time: new Date() }]);
+    }
+  }, [isOpen, messages.length]);
+
+  useEffect(() => {
+    if (isWaiting && isRecording) {
+      manualStopRef.current = true;
+      try {
+        recognitionRef.current?.stop();
+      } catch (err) {
+        console.error('Stop error:', err);
+      }
+      clearTimeout(silenceTimerRef.current);
+      setVolumeLevel(0);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+      setIsRecording(false);
+    }
+  }, [isWaiting, isRecording]);
 
   const handlePopupMouseDown = (e) => {
     if (e.target.closest('.send-button') || e.target.closest('.mic-icon') || e.target.closest('.popup-resize-handle') || e.target.closest('.toggle-switch')) return;
@@ -93,7 +117,15 @@ const ChatBot = () => {
     
     websocket.onopen = () => console.log('Connected to WebSocket');
     websocket.onmessage = (event) => {
-      setMessages(prev => [...prev, { text: event.data, sender: 'bot', time: new Date() }]);
+      try {
+        const data = JSON.parse(event.data);
+        const responseText = data.response || event.data;
+        setMessages(prev => [...prev, { text: responseText, sender: 'bot', time: new Date() }]);
+        setIsWaiting(false);
+      } catch (error) {
+        setMessages(prev => [...prev, { text: event.data, sender: 'bot', time: new Date() }]);
+        setIsWaiting(false);
+      }
     };
     websocket.onerror = (error) => console.error('WebSocket error:', error);
     
@@ -130,10 +162,11 @@ const ChatBot = () => {
         if (currentText) {
           clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
-            if (currentText.trim() && isRecordingRef.current) {
+            if (currentText.trim() && isRecordingRef.current && !isWaiting) {
               if (ws) {
                 setMessages(prev => [...prev, { text: currentText, sender: 'user', time: new Date() }]);
-                ws.send(currentText);
+                ws.send(JSON.stringify({ message: currentText }));
+                setIsWaiting(true);
               }
               setLiveTranscript('');
               if (!keepPopupOpenRef.current) {
@@ -172,7 +205,7 @@ const ChatBot = () => {
         }
       };
     }
-  }, [ws, keepPopupOpen, showPopup]);
+  }, [ws, keepPopupOpen, showPopup, isWaiting]);
 
   const handleMouseDown = (e) => {
     e.preventDefault();
@@ -221,10 +254,11 @@ const ChatBot = () => {
   };
 
   const sendMessage = () => {
-    if (inputText.trim() && ws) {
+    if (inputText.trim() && ws && !isWaiting) {
       setMessages(prev => [...prev, { text: inputText, sender: 'user', time: new Date() }]);
-      ws.send(inputText);
+      ws.send(JSON.stringify({ message: inputText }));
       setInputText('');
+      setIsWaiting(true);
     }
   };
 
@@ -311,6 +345,9 @@ const ChatBot = () => {
             )}
             {messages.map((msg, idx) => (
               <div key={idx} className={`message ${msg.sender}`}>
+                {msg.sender === 'bot' && (
+                  <div className="support-name">Support</div>
+                )}
                 <span>{msg.text}</span>
                 <span className="message-time">
                   {msg.time?.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -334,9 +371,11 @@ const ChatBot = () => {
                     <div className="wave" style={{ animationPlayState: 'running' }}></div>
                   </>
                 )}
-                <div className="mic-icon" style={{ transform: `scale(${1 + volumeLevel * 0.2})`, background: isRecording ? '#9333ea' : '#6b7280' }} onClick={(e) => {
+                <div className="mic-icon" style={{ transform: `scale(${1 + volumeLevel * 0.2})`, background: isRecording ? '#9333ea' : '#6b7280', opacity: isWaiting ? 0.5 : 1, cursor: isWaiting ? 'not-allowed' : 'pointer' }} onClick={(e) => {
                   e.stopPropagation();
-                  toggleRecording();
+                  if (!isWaiting) {
+                    toggleRecording();
+                  }
                 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
                     <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
@@ -350,10 +389,11 @@ const ChatBot = () => {
                 </div>
                 <button className="send-button" onClick={(e) => {
                   e.stopPropagation();
-                  if (liveTranscript.trim()) {
+                  if (liveTranscript.trim() && !isWaiting) {
                     if (ws) {
                       setMessages(prev => [...prev, { text: liveTranscript, sender: 'user', time: new Date() }]);
-                      ws.send(liveTranscript);
+                      ws.send(JSON.stringify({ message: liveTranscript }));
+                      setIsWaiting(true);
                       setLiveTranscript('');
                       if (!keepPopupOpenRef.current) {
                         manualStopRef.current = true;
@@ -367,7 +407,7 @@ const ChatBot = () => {
                       }
                     }
                   }
-                }}>
+                }} disabled={isWaiting}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                   </svg>
@@ -385,6 +425,12 @@ const ChatBot = () => {
             </div>
           )}
           
+          {isWaiting && (
+            <div className="waiting-message">
+              Please wait...
+            </div>
+          )}
+          
           <div className="chat-input">
             <div className="input-wrapper">
               <input
@@ -393,6 +439,7 @@ const ChatBot = () => {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Ask me something..."
+                disabled={isWaiting}
               />
               <button onClick={() => {
                 if (showPopup) {
@@ -414,13 +461,13 @@ const ChatBot = () => {
                 } else {
                   toggleRecording();
                 }
-              }} className={showPopup ? 'recording' : ''} title="Voice input">
+              }} className={showPopup ? 'recording' : ''} title="Voice input" disabled={isWaiting}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                   <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                 </svg>
               </button>
-              <button onClick={sendMessage} title="Send message">
+              <button onClick={sendMessage} title="Send message" disabled={isWaiting}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                 </svg>
