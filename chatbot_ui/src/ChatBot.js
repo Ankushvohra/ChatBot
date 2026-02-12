@@ -112,6 +112,18 @@ const ChatBot = () => {
     };
   }, [popupPosition, size.width, size.height, popupWidth]);
 
+  const downloadFile = (data, filename, type) => {
+    const blob = new Blob([atob(data)], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     const websocket = new WebSocket('ws://localhost:8080');
     
@@ -120,7 +132,18 @@ const ChatBot = () => {
       try {
         const data = JSON.parse(event.data);
         const responseText = data.response || event.data;
-        setMessages(prev => [...prev, { text: responseText, sender: 'bot', time: new Date() }]);
+        
+        if (data.file) {
+          const messageWithDownload = {
+            text: responseText,
+            sender: 'bot',
+            time: new Date(),
+            file: data.file
+          };
+          setMessages(prev => [...prev, messageWithDownload]);
+        } else {
+          setMessages(prev => [...prev, { text: responseText, sender: 'bot', time: new Date() }]);
+        }
         setIsWaiting(false);
       } catch (error) {
         setMessages(prev => [...prev, { text: event.data, sender: 'bot', time: new Date() }]);
@@ -332,7 +355,7 @@ const ChatBot = () => {
           <div className="resize-handle-height" onMouseDown={handleHeightMouseDown}></div>
           <div className="resize-handle-width" onMouseDown={handleMouseDown}></div>
           
-          <div className="chat-header">
+          <div className="chat-header header-shadow">
             <h3>Chat Support</h3>
             <button onClick={() => setIsOpen(false)}>✕</button>
           </div>
@@ -349,6 +372,16 @@ const ChatBot = () => {
                   <div className="support-name">Support</div>
                 )}
                 <span>{msg.text}</span>
+                {msg.file && (
+                  <div className="file-download">
+                    <button 
+                      className="download-btn"
+                      onClick={() => downloadFile(msg.file.data, msg.file.filename, msg.file.type)}
+                    >
+                      📄 Download {msg.file.filename}
+                    </button>
+                  </div>
+                )}
                 <span className="message-time">
                   {msg.time?.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                 </span>
