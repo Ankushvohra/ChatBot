@@ -13,8 +13,7 @@ INTENTS = {
     "leave_policy": ["leave", "paid leave", "leave policy"],
     "all_employees_leave": ["all employees", "all employee", "employee details", "all employee details", "everyone leave", "all leave details", "leave details all", "employee data", "all data", "data of employees", "employees data", "give me", "wanna know about all", "want to know about all"],
     "office_timing": ["office timing", "working hours", "office hours"],
-    "wfh_policy": ["work from home", "wfh", "remote work"],
-    "process_invoices": ["process invoices", "calculate invoices", "invoice processing", "long operation"]
+    "wfh_policy": ["work from home", "wfh", "remote work"]
 }
 
 def detect_intent(message):
@@ -110,23 +109,12 @@ def handle_intent(intent, websocket_id, user_sessions):
         return {"response": "Employees get 20 paid leaves annually.\n\nWould you like to get details about your leave balance? (Yes/No)"}
     
     elif intent == "all_employees_leave":
-        csv_data = get_all_employees_leave()
-        return {
-            "response": f"Here are the leave details for all employees ({len(employee_df)} employees):",
-            "file": {
-                "data": csv_data,
-                "filename": "employee_leave_balance.csv",
-                "type": "text/csv"
-            }
-        }
+        return {"type": "employee_leave_operation"}
     
     elif intent == "office_timing":
         return {"response": "Office timing is 9 AM to 6 PM."}
     
     elif intent == "wfh_policy":
         return {"response": "Hybrid work model is allowed."}
-    
-    elif intent == "process_invoices":
-        return {"type": "long_operation"}
     
     return {"response": "Sorry, I didn't understand your request."}

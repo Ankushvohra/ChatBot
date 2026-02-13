@@ -6,6 +6,7 @@ from chatbot_logic import (
     extract_employee_id, 
     is_affirmative, 
     get_employee_leave_balance, 
+    get_all_employees_leave,
     handle_intent
 )
 
@@ -47,15 +48,24 @@ async def handler(websocket):
                 intent = detect_intent(user_message)
                 response = handle_intent(intent, websocket_id, user_sessions) if intent != "unknown" else {"response": "Sorry, I didn't understand your request."}
             
-            # Handle long-running operations with progress updates
-            if response.get("type") == "long_operation":
-                await websocket.send(json.dumps({"type": "status", "message": "Processing invoices..."}))
-                await asyncio.sleep(30)
-                await websocket.send(json.dumps({"type": "status", "message": "Calculating totals..."}))
-                await asyncio.sleep(30)
-                await websocket.send(json.dumps({"type": "status", "message": "Generating report..."}))
-                await asyncio.sleep(30)
-                await websocket.send(json.dumps({"type": "response", "message": "Complete! All invoices processed successfully."}))
+            # Handle employee leave operation with progress updates
+            if response.get("type") == "employee_leave_operation":
+                await websocket.send(json.dumps({"type": "status", "message": "Fetching employee records..."}))
+                await asyncio.sleep(20)
+                await websocket.send(json.dumps({"type": "status", "message": "Processing leave balances..."}))
+                await asyncio.sleep(20)
+                await websocket.send(json.dumps({"type": "status", "message": "Generating CSV file..."}))
+                await asyncio.sleep(20)
+                
+                csv_data = get_all_employees_leave()
+                await websocket.send(json.dumps({
+                    "response": "Here are the leave details for all employees (10 employees):",
+                    "file": {
+                        "data": csv_data,
+                        "filename": "employee_leave_balance.csv",
+                        "type": "text/csv"
+                    }
+                }))
             else:
                 await websocket.send(json.dumps(response))
     
