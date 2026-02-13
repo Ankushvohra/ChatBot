@@ -13,7 +13,8 @@ INTENTS = {
     "leave_policy": ["leave", "paid leave", "leave policy"],
     "all_employees_leave": ["all employees", "all employee", "employee details", "all employee details", "everyone leave", "all leave details", "leave details all", "employee data", "all data", "data of employees", "employees data", "give me", "wanna know about all", "want to know about all"],
     "office_timing": ["office timing", "working hours", "office hours"],
-    "wfh_policy": ["work from home", "wfh", "remote work"]
+    "wfh_policy": ["work from home", "wfh", "remote work"],
+    "process_invoices": ["process invoices", "calculate invoices", "invoice processing", "long operation"]
 }
 
 def detect_intent(message):
@@ -82,6 +83,9 @@ def get_employee_leave_balance(employee_id):
     if employee.empty:
         return f"No record found for {employee_id}. Please check the ID."
     
+    if len(employee) > 1:
+        return f"Warning: Multiple records found for {employee_id}. Please contact HR."
+    
     emp = employee.iloc[0]
     return (
         f"Leave Balance for {employee_id}:\n"
@@ -121,5 +125,8 @@ def handle_intent(intent, websocket_id, user_sessions):
     
     elif intent == "wfh_policy":
         return {"response": "Hybrid work model is allowed."}
+    
+    elif intent == "process_invoices":
+        return {"type": "long_operation"}
     
     return {"response": "Sorry, I didn't understand your request."}

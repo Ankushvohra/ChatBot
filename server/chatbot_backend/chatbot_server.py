@@ -47,7 +47,17 @@ async def handler(websocket):
                 intent = detect_intent(user_message)
                 response = handle_intent(intent, websocket_id, user_sessions) if intent != "unknown" else {"response": "Sorry, I didn't understand your request."}
             
-            await websocket.send(json.dumps(response))
+            # Handle long-running operations with progress updates
+            if response.get("type") == "long_operation":
+                await websocket.send(json.dumps({"type": "status", "message": "Processing invoices..."}))
+                await asyncio.sleep(30)
+                await websocket.send(json.dumps({"type": "status", "message": "Calculating totals..."}))
+                await asyncio.sleep(30)
+                await websocket.send(json.dumps({"type": "status", "message": "Generating report..."}))
+                await asyncio.sleep(30)
+                await websocket.send(json.dumps({"type": "response", "message": "Complete! All invoices processed successfully."}))
+            else:
+                await websocket.send(json.dumps(response))
     
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
