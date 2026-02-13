@@ -16,7 +16,8 @@ INTENTS = {
     "leave_policy": ["leave", "paid leave", "leave policy"],
     "all_employees_leave": ["all employees", "all employee leave", "everyone leave", "all leave details", "leave details all"],
     "office_timing": ["office timing", "working hours", "office hours"],
-    "wfh_policy": ["work from home", "wfh", "remote work"]
+    "wfh_policy": ["work from home", "wfh", "remote work"],
+    "process_invoices": ["process invoices", "calculate invoices", "invoice processing", "long operation"]
 }
 
 def detect_intent(message):
@@ -55,6 +56,9 @@ def get_employee_leave_balance(employee_id):
     
     if employee.empty:
         return f"No record found for {employee_id}. Please check the ID."
+    
+    if len(employee) > 1:
+        return f"Warning: Multiple records found for {employee_id}. Please contact HR."
     
     emp = employee.iloc[0]
     return (
@@ -96,11 +100,15 @@ def handle_intent(intent, websocket_id):
     elif intent == "wfh_policy":
         return {"response": "Hybrid work model is allowed."}
     
+    elif intent == "process_invoices":
+        return {"type": "long_operation"}
+    
     return {"response": "Sorry, I didn't understand your request."}
 
 async def handler(websocket):
     print("Client connected")
     websocket_id = id(websocket)
+    print(websocket_id)
     
     try:
         async for message in websocket:
@@ -134,7 +142,17 @@ async def handler(websocket):
                 intent = detect_intent(user_message)
                 response = handle_intent(intent, websocket_id) if intent != "unknown" else {"response": "Sorry, I didn't understand your request."}
             
-            await websocket.send(json.dumps(response))
+            # Handle long-running operations with progress updates
+            if response.get("type") == "long_operation":
+                await websocket.send(json.dumps({"type": "status", "message": "Processing invoices..."}))
+                await asyncio.sleep(30)
+                await websocket.send(json.dumps({"type": "status", "message": "Calculating totals..."}))
+                await asyncio.sleep(30)
+                await websocket.send(json.dumps({"type": "status", "message": "Generating report..."}))
+                await asyncio.sleep(30)
+                await websocket.send(json.dumps({"type": "response", "message": "Complete! All invoices processed successfully."}))
+            else:
+                await websocket.send(json.dumps(response))
     
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
