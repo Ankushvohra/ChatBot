@@ -131,20 +131,34 @@ const ChatBot = () => {
     websocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const responseText = data.response || event.data;
         
-        if (data.file) {
+        if (data.type === 'status') {
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg && lastMsg.isStatus) {
+              return [...prev.slice(0, -1), { text: data.message, sender: 'bot', time: new Date(), isStatus: true }];
+            }
+            return [...prev, { text: data.message, sender: 'bot', time: new Date(), isStatus: true }];
+          });
+        } else if (data.type === 'response') {
+          setMessages(prev => {
+            const filtered = prev.filter(msg => !msg.isStatus);
+            return [...filtered, { text: data.message, sender: 'bot', time: new Date() }];
+          });
+          setIsWaiting(false);
+        } else if (data.file) {
           const messageWithDownload = {
-            text: responseText,
+            text: data.response,
             sender: 'bot',
             time: new Date(),
             file: data.file
           };
           setMessages(prev => [...prev, messageWithDownload]);
+          setIsWaiting(false);
         } else {
-          setMessages(prev => [...prev, { text: responseText, sender: 'bot', time: new Date() }]);
+          setMessages(prev => [...prev, { text: data.response, sender: 'bot', time: new Date() }]);
+          setIsWaiting(false);
         }
-        setIsWaiting(false);
       } catch (error) {
         setMessages(prev => [...prev, { text: event.data, sender: 'bot', time: new Date() }]);
         setIsWaiting(false);
