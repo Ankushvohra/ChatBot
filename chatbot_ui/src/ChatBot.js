@@ -39,6 +39,14 @@ const ChatBot = () => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
 
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    const messagesContainer = document.querySelector('.chat-messages');
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }, [messages]);
+
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       setMessages([{ text: "Hi! I am your bot.\nAsk your queries.", sender: 'bot', time: new Date() }]);
