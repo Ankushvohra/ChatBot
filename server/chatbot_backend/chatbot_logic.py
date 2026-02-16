@@ -7,7 +7,7 @@ import base64
 nlp = spacy.load("en_core_web_sm")
 
 # Load employee data
-employee_df = pd.read_csv("employee_leave_balance.csv")
+employee_df = pd.read_csv("../employee_leave_balance.csv")
 
 INTENTS = {
     "leave_policy": ["leave", "paid leave", "leave policy"],
