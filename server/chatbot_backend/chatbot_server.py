@@ -22,6 +22,14 @@ async def handler(websocket):
             
             try:
                 data = json.loads(message)
+                
+                # Handle disconnect message
+                if data.get("type") == "disconnect":
+                    session_id = data.get("sessionId")
+                    print(f"Client {session_id} disconnected")
+                    user_sessions.pop(websocket_id, None)
+                    break  # Exit the loop to close connection
+                
                 user_message = data.get("message", "") if isinstance(data, dict) else str(data)
             except json.JSONDecodeError:
                 user_message = message
