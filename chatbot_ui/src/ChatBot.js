@@ -30,6 +30,27 @@ const ChatBot = () => {
   const isRecordingRef = useRef(false);
   const manualStopRef = useRef(false);
   const [isWaiting, setIsWaiting] = useState(false);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const timeoutRef = useRef(null);
+  const [sessionId] = useState(() => crypto.randomUUID());
+
+  // Reset activity timer on any user interaction
+  const resetActivityTimer = () => {
+    if (isSessionExpired) return;
+    clearTimeout(timeoutRef.current);
+    if (!isWaiting) { // Only start timer if not waiting
+      timeoutRef.current = setTimeout(() => {
+        setIsSessionExpired(true);
+        setMessages(prev => [...prev, { 
+          text: "Session expired due to inactivity. Please refresh to continue.", 
+          sender: 'bot', 
+          time: new Date() 
+        }]);
+        if (ws) ws.close();
+      console.log('Session expired, WebSocket closed');
+      }, 60000); // 1 minute
+    }
+  };
 
   useEffect(() => {
     keepPopupOpenRef.current = keepPopupOpen;
@@ -52,6 +73,15 @@ const ChatBot = () => {
       setMessages([{ text: "Hi! I am your bot.\nAsk your queries.", sender: 'bot', time: new Date() }]);
     }
   }, [isOpen, messages.length]);
+
+  // Start timer when chat opens
+  useEffect(() => {
+    if (isOpen && !isSessionExpired) {
+      resetActivityTimer();
+    }
+    return () => clearTimeout(timeoutRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isSessionExpired]);
 
   useEffect(() => {
     if (isWaiting && isRecording) {
@@ -133,9 +163,15 @@ const ChatBot = () => {
   };
 
   useEffect(() => {
+    if (!isOpen) return;
+    
     const websocket = new WebSocket('ws://localhost:8080');
     
     websocket.onopen = () => console.log('Connected to WebSocket');
+    
+    websocket.onclose = () => {
+      console.log('WebSocket connection closed');
+    };
     websocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -154,6 +190,7 @@ const ChatBot = () => {
             return [...filtered, { text: data.message, sender: 'bot', time: new Date() }];
           });
           setIsWaiting(false);
+          resetActivityTimer(); // Resume timer after response
         } else if (data.file) {
           const messageWithDownload = {
             text: data.response,
@@ -163,13 +200,16 @@ const ChatBot = () => {
           };
           setMessages(prev => [...prev, messageWithDownload]);
           setIsWaiting(false);
+          resetActivityTimer(); // Resume timer after response
         } else {
           setMessages(prev => [...prev, { text: data.response, sender: 'bot', time: new Date() }]);
           setIsWaiting(false);
+          resetActivityTimer(); // Resume timer after response
         }
       } catch (error) {
         setMessages(prev => [...prev, { text: event.data, sender: 'bot', time: new Date() }]);
         setIsWaiting(false);
+        resetActivityTimer(); // Resume timer after response
       }
     };
     websocket.onerror = (error) => console.error('WebSocket error:', error);
@@ -177,7 +217,7 @@ const ChatBot = () => {
     setWs(websocket);
     
     return () => websocket.close();
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -210,7 +250,7 @@ const ChatBot = () => {
             if (currentText.trim() && isRecordingRef.current && !isWaiting) {
               if (ws) {
                 setMessages(prev => [...prev, { text: currentText, sender: 'user', time: new Date() }]);
-                ws.send(JSON.stringify({ message: currentText }));
+                ws.send(JSON.stringify({ message: currentText, sessionId }));
                 setIsWaiting(true);
               }
               setLiveTranscript('');
@@ -299,9 +339,12 @@ const ChatBot = () => {
   };
 
   const sendMessage = () => {
+    if (isSessionExpired) return;
+    resetActivityTimer();
+    
     if (inputText.trim() && ws && !isWaiting) {
       setMessages(prev => [...prev, { text: inputText, sender: 'user', time: new Date() }]);
-      ws.send(JSON.stringify({ message: inputText }));
+      ws.send(JSON.stringify({ message: inputText, sessionId }));
       setInputText('');
       setIsWaiting(true);
     }
@@ -379,7 +422,24 @@ const ChatBot = () => {
           
           <div className="chat-header header-shadow">
             <h3>Chat Support</h3>
-            <button onClick={() => setIsOpen(false)}>✕</button>
+            <button onClick={() => {
+              console.log('Close button clicked, ws state:', ws?.readyState);
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending disconnect message');
+                ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
+                setTimeout(() => {
+                  ws.close();
+                  setWs(null);
+                }, 100);
+              } else if (ws) {
+                console.log('WebSocket not open, just closing');
+                ws.close();
+                setWs(null);
+              }
+              clearTimeout(timeoutRef.current);
+              setIsSessionExpired(false);
+              setIsOpen(false);
+            }}>✕</button>
           </div>
           
           <div className="chat-messages">
@@ -447,7 +507,7 @@ const ChatBot = () => {
                   if (liveTranscript.trim() && !isWaiting) {
                     if (ws) {
                       setMessages(prev => [...prev, { text: liveTranscript, sender: 'user', time: new Date() }]);
-                      ws.send(JSON.stringify({ message: liveTranscript }));
+                      ws.send(JSON.stringify({ message: liveTranscript, sessionId }));
                       setIsWaiting(true);
                       setLiveTranscript('');
                       if (!keepPopupOpenRef.current) {
@@ -491,10 +551,15 @@ const ChatBot = () => {
               <input
                 type="text"
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  if (!isSessionExpired) {
+                    resetActivityTimer();
+                    setInputText(e.target.value);
+                  }
+                }}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Ask me something..."
-                disabled={isWaiting}
+                disabled={isWaiting || isSessionExpired}
               />
               <button onClick={() => {
                 if (showPopup) {
@@ -516,13 +581,13 @@ const ChatBot = () => {
                 } else {
                   toggleRecording();
                 }
-              }} className={showPopup ? 'recording' : ''} title="Voice input" disabled={isWaiting}>
+              }} className={showPopup ? 'recording' : ''} title="Voice input" disabled={isWaiting || isSessionExpired}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                   <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                 </svg>
               </button>
-              <button onClick={sendMessage} title="Send message" disabled={isWaiting}>
+              <button onClick={sendMessage} title="Send message" disabled={isWaiting || isSessionExpired}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                 </svg>
