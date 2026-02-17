@@ -31,26 +31,9 @@ const ChatBot = () => {
   const manualStopRef = useRef(false);
   const [isWaiting, setIsWaiting] = useState(false);
   const [isSessionExpired, setIsSessionExpired] = useState(false);
-  const timeoutRef = useRef(null);
   const [sessionId] = useState(() => crypto.randomUUID());
 
-  // Reset activity timer on any user interaction
-  const resetActivityTimer = () => {
-    if (isSessionExpired) return;
-    clearTimeout(timeoutRef.current);
-    if (!isWaiting) { // Only start timer if not waiting
-      timeoutRef.current = setTimeout(() => {
-        setIsSessionExpired(true);
-        setMessages(prev => [...prev, { 
-          text: "Session expired due to inactivity. Please refresh to continue.", 
-          sender: 'bot', 
-          time: new Date() 
-        }]);
-        if (ws) ws.close();
-      console.log('Session expired, WebSocket closed');
-      }, 60000); // 1 minute
-    }
-  };
+
 
   useEffect(() => {
     keepPopupOpenRef.current = keepPopupOpen;
@@ -74,14 +57,7 @@ const ChatBot = () => {
     }
   }, [isOpen, messages.length]);
 
-  // Start timer when chat opens
-  useEffect(() => {
-    if (isOpen && !isSessionExpired) {
-      resetActivityTimer();
-    }
-    return () => clearTimeout(timeoutRef.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, isSessionExpired]);
+
 
   useEffect(() => {
     if (isWaiting && isRecording) {
@@ -176,6 +152,16 @@ const ChatBot = () => {
       try {
         const data = JSON.parse(event.data);
         
+        if (data.type === 'session_expired') {
+          setIsSessionExpired(true);
+          setMessages(prev => [...prev, { 
+            text: data.response, 
+            sender: 'bot', 
+            time: new Date() 
+          }]);
+          return;
+        }
+        
         if (data.type === 'status') {
           setMessages(prev => {
             const lastMsg = prev[prev.length - 1];
@@ -190,7 +176,6 @@ const ChatBot = () => {
             return [...filtered, { text: data.message, sender: 'bot', time: new Date() }];
           });
           setIsWaiting(false);
-          resetActivityTimer(); // Resume timer after response
         } else if (data.file) {
           const messageWithDownload = {
             text: data.response,
@@ -200,16 +185,13 @@ const ChatBot = () => {
           };
           setMessages(prev => [...prev, messageWithDownload]);
           setIsWaiting(false);
-          resetActivityTimer(); // Resume timer after response
         } else {
           setMessages(prev => [...prev, { text: data.response, sender: 'bot', time: new Date() }]);
           setIsWaiting(false);
-          resetActivityTimer(); // Resume timer after response
         }
       } catch (error) {
         setMessages(prev => [...prev, { text: event.data, sender: 'bot', time: new Date() }]);
         setIsWaiting(false);
-        resetActivityTimer(); // Resume timer after response
       }
     };
     websocket.onerror = (error) => console.error('WebSocket error:', error);
@@ -340,7 +322,6 @@ const ChatBot = () => {
 
   const sendMessage = () => {
     if (isSessionExpired) return;
-    resetActivityTimer();
     
     if (inputText.trim() && ws && !isWaiting) {
       setMessages(prev => [...prev, { text: inputText, sender: 'user', time: new Date() }]);
@@ -436,7 +417,6 @@ const ChatBot = () => {
                 ws.close();
                 setWs(null);
               }
-              clearTimeout(timeoutRef.current);
               setIsSessionExpired(false);
               setIsOpen(false);
             }}>✕</button>
@@ -553,7 +533,6 @@ const ChatBot = () => {
                 value={inputText}
                 onChange={(e) => {
                   if (!isSessionExpired) {
-                    resetActivityTimer();
                     setInputText(e.target.value);
                   }
                 }}
