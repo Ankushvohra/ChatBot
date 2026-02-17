@@ -13,17 +13,19 @@ from chatbot_logic import (
 user_sessions = {}
 
 async def handler(websocket):
-    print("Client connected")
+    # print("Client connected")
     websocket_id = id(websocket)
+    print(f"Client connected - ID: {websocket_id}")
     
     try:
         async for message in websocket:
-            print("Received:", message)
+            print("Received:","(",websocket_id, ")", message)
             
             try:
                 data = json.loads(message)
                 user_message = data.get("message", "") if isinstance(data, dict) else str(data)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f"Client disconnected - ID: {websocket_id}, Reason: {e}")
                 user_message = message
             
             session_state = user_sessions.get(websocket_id)
@@ -50,16 +52,16 @@ async def handler(websocket):
             
             # Handle employee leave operation with progress updates
             if response.get("type") == "employee_leave_operation":
-                await websocket.send(json.dumps({"type": "status", "message": "Fetching employee records..."}))
-                await asyncio.sleep(20)
-                await websocket.send(json.dumps({"type": "status", "message": "Processing leave balances..."}))
-                await asyncio.sleep(20)
-                await websocket.send(json.dumps({"type": "status", "message": "Generating CSV file..."}))
-                await asyncio.sleep(20)
+                # await websocket.send(json.dumps({"type": "status", "message": "Fetching employee records..."}))
+                await asyncio.sleep(120)
+                # await websocket.send(json.dumps({"type": "status", "message": "Processing leave balances..."}))
+                # await asyncio.sleep(20)
+                # await websocket.send(json.dumps({"type": "status", "message": "Generating CSV file..."}))
+                # await asyncio.sleep(20)
                 
                 csv_data = get_all_employees_leave()
                 await websocket.send(json.dumps({
-                    "response": "Here are the leave details for all employees (10 employees):",
+                    "response": "Here are the leave details for all employees :",
                     "file": {
                         "data": csv_data,
                         "filename": "employee_leave_balance.csv",
@@ -70,7 +72,8 @@ async def handler(websocket):
                 await websocket.send(json.dumps(response))
     
     except websockets.exceptions.ConnectionClosed:
-        print("Client disconnected")
+        # print("Client disconnected")
+        print(f"Client disconnected - ID: {websocket_id}")
         user_sessions.pop(websocket_id, None)
 
 async def main():
