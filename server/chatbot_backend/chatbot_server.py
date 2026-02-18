@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import websockets
 from chatbot_logic import (
     detect_intent, 
@@ -11,15 +12,48 @@ from chatbot_logic import (
 )
 
 user_sessions = {}
+session_timestamps = {}
+SESSION_TIMEOUT = 60  # 60 seconds
+
+async def check_session_timeout(websocket, websocket_id):
+    """Check if session has expired and notify client"""
+    while websocket_id in session_timestamps:
+        await asyncio.sleep(10)  # Check every 10 seconds
+        
+        if websocket_id in session_timestamps:
+            last_activity = session_timestamps[websocket_id]
+            elapsed = time.time() - last_activity
+            print(f"Session {websocket_id}: {elapsed:.1f}s idle (timeout at {SESSION_TIMEOUT}s)")
+            
+            if elapsed > SESSION_TIMEOUT:
+                print(f"Session {websocket_id} expired! Sending expiration message...")
+                try:
+                    await websocket.send(json.dumps({
+                        "type": "session_expired",
+                        "response": "Session expired due to inactivity. Please refresh to continue."
+                    }))
+                    print(f"Expiration message sent to {websocket_id}")
+                    await asyncio.sleep(0.5)
+                    await websocket.close(1000, "Session timeout")
+                    print(f"Connection closed for {websocket_id}")
+                except Exception as e:
+                    print(f"Error closing session {websocket_id}: {e}")
+                
+                user_sessions.pop(websocket_id, None)
+                session_timestamps.pop(websocket_id, None)
+                break
 
 async def handler(websocket):
     # print("Client connected")
     websocket_id = id(websocket)
-    print(f"Client connected - ID: {websocket_id}")
+    session_timestamps[websocket_id] = time.time()
+    
+    timeout_task = asyncio.create_task(check_session_timeout(websocket, websocket_id))
     
     try:
         async for message in websocket:
-            print("Received:","(",websocket_id, ")", message)
+            session_timestamps[websocket_id] = time.time()
+            print("Received:", message)
             
             try:
                 data = json.loads(message)
@@ -83,6 +117,9 @@ async def handler(websocket):
         # print("Client disconnected")
         print(f"Client disconnected - ID: {websocket_id}")
         user_sessions.pop(websocket_id, None)
+        session_timestamps.pop(websocket_id, None)
+    finally:
+        timeout_task.cancel()
 
 async def main():
     async with websockets.serve(handler, "localhost", 8080):
@@ -90,4 +127,7 @@ async def main():
         await asyncio.Future()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nServer stopped by user")
