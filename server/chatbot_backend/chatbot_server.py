@@ -12,56 +12,35 @@ from chatbot_logic import (
 )
 
 user_sessions = {}
-session_timestamps = {}
 SESSION_TIMEOUT = 60  # 60 seconds
 
-async def check_session_timeout(websocket, websocket_id):
-    """Check if session has expired and notify client"""
-    while websocket_id in session_timestamps:
-        await asyncio.sleep(10)  # Check every 10 seconds
-        
-        if websocket_id in session_timestamps:
-            last_activity = session_timestamps[websocket_id]
-            elapsed = time.time() - last_activity
-            print(f"Session {websocket_id}: {elapsed:.1f}s idle (timeout at {SESSION_TIMEOUT}s)")
-            
-            if elapsed > SESSION_TIMEOUT:
-                print(f"Session {websocket_id} expired! Sending expiration message...")
-                try:
-                    await websocket.send(json.dumps({
-                        "type": "session_expired",
-                        "response": "Session expired due to inactivity. Please refresh to continue."
-                    }))
-                    print(f"Expiration message sent to {websocket_id}")
-                    await asyncio.sleep(0.5)
-                    await websocket.close(1000, "Session timeout")
-                    print(f"Connection closed for {websocket_id}")
-                except Exception as e:
-                    print(f"Error closing session {websocket_id}: {e}")
-                
-                user_sessions.pop(websocket_id, None)
-                session_timestamps.pop(websocket_id, None)
-                break
+async def process_with_timeout_pause(websocket_id, coro):
+    """Execute a coroutine while pausing timeout checks"""
+    try:
+        result = await coro
+        return result
+    finally:
+        pass
 
 async def handler(websocket):
-    # print("Client connected")
     websocket_id = id(websocket)
-    session_timestamps[websocket_id] = time.time()
-    
-    timeout_task = asyncio.create_task(check_session_timeout(websocket, websocket_id))
+    session_id = None
     
     try:
         async for message in websocket:
-            session_timestamps[websocket_id] = time.time()
             print("Received:", message)
             
             try:
                 data = json.loads(message)
                 
+                # Capture session ID from first message
+                if not session_id and data.get("sessionId"):
+                    session_id = data.get("sessionId")
+                    print(f"Session started - Session ID: {session_id}")
+                
                 # Handle disconnect message
                 if data.get("type") == "disconnect":
-                    session_id = data.get("sessionId")
-                    print(f"Client {session_id} disconnected")
+                    print(f"Session ended - Session ID: {session_id}")
                     user_sessions.pop(websocket_id, None)
                     break  # Exit the loop to close connection
                 
@@ -94,32 +73,25 @@ async def handler(websocket):
             
             # Handle employee leave operation with progress updates
             if response.get("type") == "employee_leave_operation":
-                # await websocket.send(json.dumps({"type": "status", "message": "Fetching employee records..."}))
-                await asyncio.sleep(120)
-                # await websocket.send(json.dumps({"type": "status", "message": "Processing leave balances..."}))
-                # await asyncio.sleep(20)
-                # await websocket.send(json.dumps({"type": "status", "message": "Generating CSV file..."}))
-                # await asyncio.sleep(20)
+                async def process_employee_data():
+                    await asyncio.sleep(60)
+                    csv_data = get_all_employees_leave()
+                    await websocket.send(json.dumps({
+                        "response": "Here are the leave details for all employees :",
+                        "file": {
+                            "data": csv_data,
+                            "filename": "employee_leave_balance.csv",
+                            "type": "text/csv"
+                        }
+                    }))
                 
-                csv_data = get_all_employees_leave()
-                await websocket.send(json.dumps({
-                    "response": "Here are the leave details for all employees :",
-                    "file": {
-                        "data": csv_data,
-                        "filename": "employee_leave_balance.csv",
-                        "type": "text/csv"
-                    }
-                }))
+                await process_with_timeout_pause(websocket_id, process_employee_data())
             else:
                 await websocket.send(json.dumps(response))
     
     except websockets.exceptions.ConnectionClosed:
-        # print("Client disconnected")
         print(f"Client disconnected - ID: {websocket_id}")
         user_sessions.pop(websocket_id, None)
-        session_timestamps.pop(websocket_id, None)
-    finally:
-        timeout_task.cancel()
 
 async def main():
     async with websockets.serve(handler, "localhost", 8080):
