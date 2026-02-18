@@ -13,7 +13,7 @@ from chatbot_logic import (
 
 user_sessions = {}
 session_timestamps = {}
-SESSION_TIMEOUT = 60  # 60 seconds
+SESSION_TIMEOUT = 300  # 5 minutes
 
 async def check_session_timeout(websocket, websocket_id):
     """Check if session has expired and notify client"""
@@ -23,19 +23,15 @@ async def check_session_timeout(websocket, websocket_id):
         if websocket_id in session_timestamps:
             last_activity = session_timestamps[websocket_id]
             elapsed = time.time() - last_activity
-            print(f"Session {websocket_id}: {elapsed:.1f}s idle (timeout at {SESSION_TIMEOUT}s)")
             
             if elapsed > SESSION_TIMEOUT:
-                print(f"Session {websocket_id} expired! Sending expiration message...")
                 try:
                     await websocket.send(json.dumps({
                         "type": "session_expired",
                         "response": "Session expired due to inactivity. Please refresh to continue."
                     }))
-                    print(f"Expiration message sent to {websocket_id}")
                     await asyncio.sleep(0.5)
                     await websocket.close(1000, "Session timeout")
-                    print(f"Connection closed for {websocket_id}")
                 except Exception as e:
                     print(f"Error closing session {websocket_id}: {e}")
                 
@@ -90,7 +86,7 @@ async def handler(websocket):
             
             else:
                 intent = detect_intent(user_message)
-                response = handle_intent(intent, websocket_id, user_sessions) if intent != "unknown" else {"response": "Sorry, I didn't understand your request."}
+                response = handle_intent(intent, websocket_id, user_sessions, user_message)
             
             # Handle employee leave operation with progress updates
             if response.get("type") == "employee_leave_operation":
