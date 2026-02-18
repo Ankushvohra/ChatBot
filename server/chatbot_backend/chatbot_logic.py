@@ -2,12 +2,14 @@ import pandas as pd
 import spacy
 import re
 import base64
+import os
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
 
 # Load employee data
-employee_df = pd.read_csv("../employee_leave_balance.csv")
+csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "employee_leave_balance.csv")
+employee_df = pd.read_csv(csv_path)
 
 INTENTS = {
     "leave_policy": ["leave", "paid leave", "leave policy"],

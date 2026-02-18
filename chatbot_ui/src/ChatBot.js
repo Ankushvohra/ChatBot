@@ -31,7 +31,11 @@ const ChatBot = () => {
   const manualStopRef = useRef(false);
   const [isWaiting, setIsWaiting] = useState(false);
   const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const [showSessionExpiredModal, setShowSessionExpiredModal] = useState(false);
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
+  const inactivityTimerRef = useRef(null);
+  const SESSION_TIMEOUT = 90000; // 90 seconds
 
 
 
@@ -42,6 +46,38 @@ const ChatBot = () => {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  const resetInactivityTimer = () => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    if (!isWaiting) {
+      inactivityTimerRef.current = setTimeout(() => {
+        setIsSessionExpired(true);
+        setShowSessionExpiredModal(true);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
+          ws.close();
+        }
+      }, SESSION_TIMEOUT);
+    }
+  };
+
+  useEffect(() => {
+    if (ws) {
+      resetInactivityTimer();
+    }
+  }, [ws]);
+
+  useEffect(() => {
+    if (!isWaiting && ws) {
+      resetInactivityTimer();
+    } else {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    }
+  }, [isWaiting]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -141,6 +177,8 @@ const ChatBot = () => {
   useEffect(() => {
     if (!isOpen) return;
     
+    if (ws) return; // Already connected
+    
     const websocket = new WebSocket('ws://localhost:8080');
     
     websocket.onopen = () => console.log('Connected to WebSocket');
@@ -154,11 +192,7 @@ const ChatBot = () => {
         
         if (data.type === 'session_expired') {
           setIsSessionExpired(true);
-          setMessages(prev => [...prev, { 
-            text: data.response, 
-            sender: 'bot', 
-            time: new Date() 
-          }]);
+          setShowSessionExpiredModal(true);
           return;
         }
         
@@ -197,8 +231,6 @@ const ChatBot = () => {
     websocket.onerror = (error) => console.error('WebSocket error:', error);
     
     setWs(websocket);
-    
-    return () => websocket.close();
   }, [isOpen]);
 
   useEffect(() => {
@@ -328,6 +360,7 @@ const ChatBot = () => {
       ws.send(JSON.stringify({ message: inputText, sessionId }));
       setInputText('');
       setIsWaiting(true);
+      resetInactivityTimer();
     }
   };
 
@@ -403,23 +436,10 @@ const ChatBot = () => {
           
           <div className="chat-header header-shadow">
             <h3>Chat Support</h3>
-            <button onClick={() => {
-              console.log('Close button clicked, ws state:', ws?.readyState);
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                console.log('Sending disconnect message');
-                ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
-                setTimeout(() => {
-                  ws.close();
-                  setWs(null);
-                }, 100);
-              } else if (ws) {
-                console.log('WebSocket not open, just closing');
-                ws.close();
-                setWs(null);
-              }
-              setIsSessionExpired(false);
-              setIsOpen(false);
-            }}>✕</button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setIsOpen(false)} title="Minimize">−</button>
+              <button onClick={() => setShowCloseConfirmModal(true)} title="Close">✕</button>
+            </div>
           </div>
           
           <div className="chat-messages">
@@ -520,6 +540,41 @@ const ChatBot = () => {
             </div>
           )}
           
+          {showCloseConfirmModal && (
+            <div className="session-expired-modal">
+              <div className="modal-content" style={{ maxWidth: '250px', padding: '20px' }}>
+                <h3 style={{ fontSize: '16px', margin: '0 0 15px 0' }}>Would you like to end session?</h3>
+                <div style={{ display: 'flex', gap: '20px', marginTop: '15px', justifyContent: 'center' }}>
+                  <button onClick={() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                      ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
+                      ws.close();
+                      setWs(null);
+                    }
+                    setMessages([]);
+                    setIsWaiting(false);
+                    setIsSessionExpired(false);
+                    setIsOpen(false);
+                    setShowCloseConfirmModal(false);
+                  }}>Yes</button>
+                  <button onClick={() => setShowCloseConfirmModal(false)}>No</button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {showSessionExpiredModal && (
+            <div className="session-expired-modal">
+              <div className="modal-content">
+                <h3>Your session has timed out.</h3>
+                <p>The previous conversation will be deleted.</p>
+                <button onClick={() => {
+                  window.location.reload();
+                }}>Refresh session</button>
+              </div>
+            </div>
+          )}
+          
           {isWaiting && (
             <div className="waiting-message">
               Please wait...
@@ -534,6 +589,7 @@ const ChatBot = () => {
                 onChange={(e) => {
                   if (!isSessionExpired) {
                     setInputText(e.target.value);
+                    resetInactivityTimer();
                   }
                 }}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
