@@ -183,7 +183,8 @@ const ChatBot = () => {
         .replace(/&gt;/g, '>')
         .replace(/&#39;/g, "'")
         .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&');
+        .replace(/&amp;/g, '&')
+        .replace(/var\(--primary-color\)/g, '#9333ea');
     });
   };
 
@@ -464,7 +465,7 @@ const ChatBot = () => {
           <div className="resize-handle-width" onMouseDown={handleMouseDown}></div>
           
           <div className="chat-header header-shadow">
-            <h3>Chat Support</h3>
+            <h3>Cloud Management and Optimization</h3>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setIsOpen(false)} title="Minimize">−</button>
               <button onClick={() => setShowCloseConfirmModal(true)} title="Close">✕</button>
