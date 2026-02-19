@@ -8,8 +8,7 @@ import boto3
 nlp = spacy.load("en_core_web_sm")
 
 # Initialize Bedrock agent client
-session = boto3.Session(profile_name='core-sandbox1')
-bedrock_agent = session.client('bedrock-agent-runtime', region_name='us-east-1')
+bedrock_agent = boto3.client('bedrock-agent-runtime')
 
 # Load employee data
 employee_df = pd.read_csv("employee_leave_balance.csv")
@@ -108,49 +107,14 @@ def get_all_employees_leave():
     csv_base64 = base64.b64encode(csv_data.encode()).decode()
     return csv_base64
 
-def format_cost_data(response_text):
-    """Format cost breakdown data into a readable table"""
-    # Check if response contains cost data pattern
-    cost_pattern = r'(\d{4}\.\d{2}):\s*\$([\d,]+)'
-    matches = re.findall(cost_pattern, response_text)
-    
-    if len(matches) >= 2:  # If multiple cost entries found
-        # Extract the intro text before the cost data
-        intro_match = re.search(r'^(.*?)(?=\d{4}\.\d{2})', response_text)
-        intro_text = intro_match.group(1).strip() if intro_match else ""
-        
-        # Create formatted table
-        table_html = f"""
-{intro_text}
-
-@@htmlstart@@
-<table border="1" cellpadding="8" cellspacing="0">
-<tr>
-<th style="color: white; background-color: #9333ea;">Month</th>
-<th style="color: white; background-color: #9333ea;">Cost</th>
-</tr>"""
-        
-        for month, cost in matches:
-            table_html += f"""
-<tr>
-<td>{month}</td>
-<td>${cost}</td>
-</tr>"""
-        
-        table_html += """
-</table>
-@@htmlend@@"""
-        
-        return table_html
-    
-    return response_text
-
 def invoke_bedrock_agent(user_message, session_id):
     """Invoke AWS Bedrock agent with user message"""
     try:
         response = bedrock_agent.invoke_agent(
-            agentId="YQJCBMODNB",
-            agentAliasId="E0OUO8GNO5",
+            # agentId="YQJCBMODNB",
+            # agentAliasId="E0OUO8GNO5",
+            agentId="K0FCK2QXIU",
+            agentAliasId="NOIK0DHSAW",
             sessionId=session_id,
             inputText=user_message
         )
@@ -182,7 +146,6 @@ def handle_intent(intent, websocket_id, user_sessions, user_message=""):
     else:
         bedrock_response = invoke_bedrock_agent(user_message, str(websocket_id))
         if bedrock_response:
-            formatted_response = format_cost_data(bedrock_response)
-            return {"response": formatted_response}
+            return {"response": bedrock_response}
         else:
             return {"response": "Sorry, I didn't understand your request."}
