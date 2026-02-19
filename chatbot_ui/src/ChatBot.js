@@ -174,6 +174,35 @@ const ChatBot = () => {
     URL.revokeObjectURL(url);
   };
 
+  const parseHtmlContent = (text) => {
+    if (!text.includes('@@htmlstart@@')) return text;
+    
+    return text.replace(/@@htmlstart@@([\s\S]*?)@@htmlend@@/g, (match, htmlContent) => {
+      return htmlContent
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&');
+    });
+  };
+
+  const renderMessageContent = (text) => {
+    const parsedText = parseHtmlContent(text);
+    
+    if (parsedText.includes('<table')) {
+      const parts = parsedText.split(/(<table[\s\S]*?<\/table>)/g);
+      return parts.map((part, index) => {
+        if (part.includes('<table')) {
+          return <div key={index} dangerouslySetInnerHTML={{ __html: part }} />;
+        }
+        return part ? <span key={index}>{part}</span> : null;
+      }).filter(Boolean);
+    }
+    
+    return <span>{parsedText}</span>;
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     
@@ -453,7 +482,7 @@ const ChatBot = () => {
                 {msg.sender === 'bot' && (
                   <div className="support-name">Support</div>
                 )}
-                <span>{msg.text}</span>
+                <div>{renderMessageContent(msg.text)}</div>
                 {msg.file && (
                   <div className="file-download">
                     <button 

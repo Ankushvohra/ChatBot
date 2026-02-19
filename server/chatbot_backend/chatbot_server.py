@@ -12,15 +12,36 @@ from chatbot_logic import (
 )
 
 user_sessions = {}
-SESSION_TIMEOUT = 60  # 60 seconds
+session_timestamps = {}
+SESSION_TIMEOUT = 300  # 5 minutes
 
-async def process_with_timeout_pause(websocket_id, coro):
-    """Execute a coroutine while pausing timeout checks"""
-    try:
-        result = await coro
-        return result
-    finally:
-        pass
+async def check_session_timeout(websocket, websocket_id):
+    """Check if session has expired and notify client"""
+    while websocket_id in session_timestamps:
+        await asyncio.sleep(10)  # Check every 10 seconds
+        
+        if websocket_id in session_timestamps:
+            last_activity = session_timestamps[websocket_id]
+            elapsed = time.time() - last_activity
+            
+            if elapsed > SESSION_TIMEOUT:
+                try:
+                    await websocket.send(json.dumps({
+                        "type": "session_expired",
+                        "response": "Session expired due to inactivity. Please refresh to continue."
+                    }))
+                    await asyncio.sleep(0.5)
+                    await websocket.close(1000, "Session timeout")
+                except Exception as e:
+                    print(f"Error closing session {websocket_id}: {e}")
+                
+                user_sessions.pop(websocket_id, None)
+                session_timestamps.pop(websocket_id, None)
+                break
+
+async def process_with_timeout_pause(websocket_id, operation):
+    """Handle long-running operations"""
+    await operation
 
 async def handler(websocket):
     websocket_id = id(websocket)
@@ -69,7 +90,7 @@ async def handler(websocket):
             
             else:
                 intent = detect_intent(user_message)
-                response = handle_intent(intent, websocket_id, user_sessions) if intent != "unknown" else {"response": "Sorry, I didn't understand your request."}
+                response = handle_intent(intent, websocket_id, user_sessions, user_message)
             
             # Handle employee leave operation with progress updates
             if response.get("type") == "employee_leave_operation":

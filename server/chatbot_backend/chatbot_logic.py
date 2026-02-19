@@ -2,14 +2,16 @@ import pandas as pd
 import spacy
 import re
 import base64
-import os
+import boto3
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
 
+# Initialize Bedrock agent client
+bedrock_agent = boto3.client('bedrock-agent-runtime')
+
 # Load employee data
-csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "employee_leave_balance.csv")
-employee_df = pd.read_csv(csv_path)
+employee_df = pd.read_csv("employee_leave_balance.csv")
 
 INTENTS = {
     "leave_policy": ["leave", "paid leave", "leave policy"],
@@ -105,7 +107,29 @@ def get_all_employees_leave():
     csv_base64 = base64.b64encode(csv_data.encode()).decode()
     return csv_base64
 
-def handle_intent(intent, websocket_id, user_sessions):
+def invoke_bedrock_agent(user_message, session_id):
+    """Invoke AWS Bedrock agent with user message"""
+    try:
+        response = bedrock_agent.invoke_agent(
+            # agentId="YQJCBMODNB",
+            # agentAliasId="E0OUO8GNO5",
+            agentId="K0FCK2QXIU",
+            agentAliasId="NOIK0DHSAW",
+            sessionId=session_id,
+            inputText=user_message
+        )
+        
+        agent_response = ""
+        for event in response['completion']:
+            if 'chunk' in event and 'bytes' in event['chunk']:
+                agent_response += event['chunk']['bytes'].decode('utf-8')
+        
+        return agent_response
+    except Exception as e:
+        print(f"Bedrock error: {e}")
+        return None
+
+def handle_intent(intent, websocket_id, user_sessions, user_message=""):
     if intent == "leave_policy":
         user_sessions[websocket_id] = "awaiting_confirmation"
         return {"response": "Employees get 20 paid leaves annually.\n\nWould you like to get details about your leave balance? (Yes/No)"}
@@ -119,4 +143,9 @@ def handle_intent(intent, websocket_id, user_sessions):
     elif intent == "wfh_policy":
         return {"response": "Hybrid work model is allowed."}
     
-    return {"response": "Sorry, I didn't understand your request."}
+    else:
+        bedrock_response = invoke_bedrock_agent(user_message, str(websocket_id))
+        if bedrock_response:
+            return {"response": bedrock_response}
+        else:
+            return {"response": "Sorry, I didn't understand your request."}
