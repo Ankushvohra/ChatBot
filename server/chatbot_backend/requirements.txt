@@ -1,4 +1,2 @@
 websockets
-pandas
-spacy
 boto3

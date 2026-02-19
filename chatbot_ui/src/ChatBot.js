@@ -35,7 +35,7 @@ const ChatBot = () => {
   const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
   const inactivityTimerRef = useRef(null);
-  const SESSION_TIMEOUT = 90000; // 90 seconds
+  const SESSION_TIMEOUT = 300000; // 300 seconds
 
 
 
