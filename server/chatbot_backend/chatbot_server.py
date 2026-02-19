@@ -42,9 +42,3 @@ async def main():
     async with websockets.serve(handler, "localhost", 8080):
         print("Simplified Chatbot running on ws://localhost:8080")
         await asyncio.Future()
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nServer stopped by user")
