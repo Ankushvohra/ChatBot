@@ -434,11 +434,24 @@ const AgentDashboard = () => {
               ws.onopen = function() {
                 console.log('Agent connected to WebSocket');
                 updateConnectionStatus(true);
+                // Identify as agent
+                ws.send(JSON.stringify({
+                  type: 'agent_connect',
+                  agentId: 'agent-001'
+                }));
               };
               
               ws.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                displayMessage(data.response || data.message, 'bot');
+                
+                if (data.type === 'queue_update') {
+                  updateCustomerQueue(data.queue);
+                } else if (data.type === 'agent_connected') {
+                  console.log('Agent connected:', data.agentId);
+                  updateCustomerQueue(data.queue);
+                } else {
+                  displayMessage(data.response || data.message, 'bot');
+                }
               };
               
               ws.onclose = function() {
