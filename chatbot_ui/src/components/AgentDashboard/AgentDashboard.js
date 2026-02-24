@@ -587,18 +587,12 @@ const AgentDashboard = () => {
               }
             }
             
-            function populateQueue() {
+            function updateCustomerQueue(queueData) {
               const queue = document.getElementById('customerQueue');
-              const customers = [
-                { id: 'session-001', name: 'John Doe', query: 'Leave balance inquiry', waitTime: '2 min' },
-                { id: 'session-002', name: 'Jane Smith', query: 'Office timing question', waitTime: '5 min' },
-                { id: 'session-003', name: 'Mike Johnson', query: 'WFH policy clarification', waitTime: '1 min' },
-                { id: 'session-004', name: 'Sarah Wilson', query: 'Employee benefits info', waitTime: '8 min' },
-                { id: 'session-005', name: 'David Brown', query: 'Vacation request help', waitTime: '3 min' },
-                { id: 'session-006', name: 'Lisa Garcia', query: 'Payroll question', waitTime: '6 min' }
-              ];
+              queue.innerHTML = '';
               
-              customers.forEach((customer, index) => {
+              queueData.forEach((customer, index) => {
+                const waitMinutes = Math.floor((Date.now() - customer.timestamp * 1000) / 60000);
                 const item = document.createElement('div');
                 item.className = 'queue-item';
                 item.dataset.sessionId = customer.id;
@@ -606,26 +600,44 @@ const AgentDashboard = () => {
                 item.innerHTML = \`
                   <div class="customer-info">
                     <span class="customer-name">\${customer.name}</span>
-                    <span class="wait-time">\${customer.waitTime}</span>
+                    <span class="wait-time">\${waitMinutes} min</span>
                   </div>
                   <div class="customer-query">\${customer.query}</div>
-                  <div class="queue-status">\${index === 0 ? 'In Progress' : 'Waiting'}</div>
+                  <div class="queue-status">Waiting</div>
                 \`;
                 
-                if (index === 0) {
-                  item.classList.add('active');
-                  item.querySelector('.queue-status').className = 'queue-status in-progress';
-                  currentSessionId = customer.id;
-                }
+                item.onclick = function() {
+                  takeCustomer(customer.id);
+                };
                 
                 queue.appendChild(item);
               });
+              
+              // Update stats
+              document.getElementById('queueCount').textContent = queueData.length;
+            }
+            
+            function takeCustomer(customerId) {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'take_customer',
+                  customerId: customerId
+                }));
+                
+                // Mark as active
+                const item = document.querySelector(\`[data-session-id="\${customerId}"]\`);
+                if (item) {
+                  item.classList.add('active');
+                  item.querySelector('.queue-status').textContent = 'In Progress';
+                  item.querySelector('.queue-status').className = 'queue-status in-progress';
+                  currentSessionId = customerId;
+                }
+              }
             }
             
             // Initialize dashboard
             window.onload = function() {
               initWebSocket();
-              populateQueue();
             };
           </script>
         </body>
