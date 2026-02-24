@@ -1,0 +1,23 @@
+/* Agent Dashboard Button */
+.agent-dashboard-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #9333ea;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -1px rgba(0, 0, 0, .06);
+  transition: all 0.2s ease;
+  z-index: 1001;
+}
+
+.agent-dashboard-btn:hover {
+  background: #7c3aed;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 12px -1px rgba(0, 0, 0, .15), 0 4px 6px -1px rgba(0, 0, 0, .08);
+}
