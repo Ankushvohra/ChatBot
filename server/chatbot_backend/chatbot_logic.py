@@ -5,8 +5,9 @@ import time
 aws_profile = os.getenv('AWS_PROFILE', 'core-sandbox1')
 aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
 
-# Initialize Bedrock agent client
-bedrock_agent = boto3.client('bedrock-agent-runtime')
+# Initialize Bedrock agent client with profile
+session = boto3.Session(profile_name=aws_profile)
+bedrock_agent = session.client('bedrock-agent-runtime', region_name=aws_region)
 
 def detect_intent(message):
     """Detect if user wants to connect to human agent"""
