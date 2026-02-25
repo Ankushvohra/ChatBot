@@ -14,7 +14,7 @@ const AgentDashboard = () => {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Agent Dashboard</title>
+          <title>Agent Login</title>
           <style>
             * {
               margin: 0;
@@ -23,10 +23,70 @@ const AgentDashboard = () => {
             }
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-              background: #f8f9fa;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
               height: 100vh;
-              overflow: hidden;
+              display: flex;
+              justify-content: center;
+              align-items: center;
             }
+            .login-container {
+              background: white;
+              padding: 40px;
+              border-radius: 12px;
+              box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+              width: 100%;
+              max-width: 400px;
+            }
+            .login-container h2 {
+              text-align: center;
+              margin-bottom: 30px;
+              color: #9333ea;
+              font-size: 24px;
+              font-weight: 600;
+            }
+            .form-group {
+              margin-bottom: 20px;
+            }
+            .form-group input {
+              width: 100%;
+              padding: 12px 16px;
+              border: 2px solid #e2e8f0;
+              border-radius: 8px;
+              font-size: 16px;
+              transition: border-color 0.2s ease;
+              outline: none;
+            }
+            .form-group input:focus {
+              border-color: #9333ea;
+              box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+            }
+            .login-btn {
+              width: 100%;
+              background: #9333ea;
+              color: white;
+              border: none;
+              padding: 12px;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: background-color 0.2s ease;
+            }
+            .login-btn:hover {
+              background: #7c3aed;
+            }
+            .error-message {
+              color: #dc3545;
+              font-size: 14px;
+              margin-bottom: 15px;
+              text-align: center;
+              padding: 8px;
+              background: #f8d7da;
+              border-radius: 4px;
+              display: none;
+            }
+            
+            /* Dashboard Styles */
             .dashboard-layout {
               display: grid;
               grid-template-columns: 280px 1fr 280px;
@@ -50,10 +110,6 @@ const AgentDashboard = () => {
             .header-title {
               font-size: 16px;
               font-weight: 600;
-              text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-            }
-            .agent-status-dropdown {
-              position: relative;
             }
             .status-select {
               background: white;
@@ -65,25 +121,6 @@ const AgentDashboard = () => {
               font-weight: 600;
               cursor: pointer;
               outline: none;
-              min-width: 110px;
-              box-shadow: 0 1px 3px rgba(147, 51, 234, 0.1);
-              transition: all 0.2s ease;
-            }
-            .status-select:hover {
-              background: #7c3aed;
-              color: white;
-              border-color: #7c3aed;
-              box-shadow: 0 4px 8px rgba(147, 51, 234, 0.3);
-            }
-            .status-select option {
-              background: white;
-              color: #9333ea;
-              padding: 10px;
-            }
-            .status-select option:hover {
-              background: #7c3aed;
-              color: white;
-              box-shadow: 0 2px 4px rgba(147, 51, 234, 0.2);
             }
             .left-panel, .middle-panel, .right-panel {
               background: white;
@@ -129,7 +166,6 @@ const AgentDashboard = () => {
             .message.user {
               background: #9333ea;
               color: white;
-              align-self: flex-end;
               margin-left: auto;
             }
             .message.bot {
@@ -155,129 +191,12 @@ const AgentDashboard = () => {
             .chat-input button {
               background: #9333ea;
               color: white;
-              border: 2px solid #9333ea;
+              border: none;
               padding: 6px 12px;
               border-radius: 6px;
               cursor: pointer;
               font-weight: 600;
               font-size: 12px;
-              transition: all 0.2s ease;
-              box-shadow: 0 1px 3px rgba(147, 51, 234, 0.2);
-            }
-            .chat-input button:hover {
-              background: #7c3aed;
-              border-color: #7c3aed;
-              transform: translateY(-1px);
-              box-shadow: 0 4px 8px rgba(147, 51, 234, 0.3);
-            }
-            .customer-queue {
-              flex: 1;
-              overflow-y: auto;
-              max-height: 400px;
-              padding-right: 4px;
-            }
-            .customer-queue::-webkit-scrollbar {
-              width: 6px;
-            }
-            .customer-queue::-webkit-scrollbar-track {
-              background: #f1f1f1;
-              border-radius: 3px;
-            }
-            .customer-queue::-webkit-scrollbar-thumb {
-              background: #9333ea;
-              border-radius: 3px;
-            }
-            .customer-queue::-webkit-scrollbar-thumb:hover {
-              background: #7c3aed;
-            }
-            .queue-item {
-              background: #f8f9fa;
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 15px;
-              margin-bottom: 10px;
-              cursor: pointer;
-              transition: all 0.2s ease;
-            }
-            .queue-item:hover {
-              background: rgba(147, 51, 234, 0.05);
-              border-color: #9333ea;
-              transform: translateY(-1px);
-              box-shadow: 0 4px 8px rgba(147, 51, 234, 0.1);
-            }
-            .queue-item.active {
-              background: rgba(147, 51, 234, 0.1);
-              border-color: #9333ea;
-            }
-            .customer-info {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 8px;
-            }
-            .customer-name {
-              font-weight: 600;
-              color: #9333ea;
-            }
-            .wait-time {
-              font-size: 12px;
-              color: #666;
-              background: #e2e8f0;
-              padding: 2px 6px;
-              border-radius: 4px;
-            }
-            .customer-query {
-              font-size: 13px;
-              color: #666;
-              margin-bottom: 8px;
-            }
-            .queue-status {
-              font-size: 12px;
-              font-weight: 600;
-              padding: 6px 12px;
-              border-radius: 6px;
-              background: white;
-              color: #9333ea;
-              border: 1px solid #9333ea;
-              box-shadow: 0 1px 3px rgba(147, 51, 234, 0.1);
-            }
-            .queue-status.in-progress {
-              background: #9333ea;
-              color: white;
-              box-shadow: 0 2px 4px rgba(147, 51, 234, 0.3);
-            }
-            .ai-agent-panel {
-              flex: 1;
-            }
-            .ai-suggestions {
-              background: #f8f9fa;
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 15px;
-              margin-bottom: 15px;
-            }
-            .suggestion-item {
-              background: white;
-              border: 1px solid #e2e8f0;
-              border-radius: 6px;
-              padding: 10px;
-              margin-bottom: 8px;
-              cursor: pointer;
-              transition: all 0.2s ease;
-            }
-            .suggestion-item:hover {
-              background: rgba(147, 51, 234, 0.05);
-              border-color: #9333ea;
-            }
-            .suggestion-title {
-              font-weight: 600;
-              color: #9333ea;
-              font-size: 13px;
-              margin-bottom: 4px;
-            }
-            .suggestion-text {
-              font-size: 12px;
-              color: #666;
             }
             .stats-grid {
               display: grid;
@@ -302,6 +221,47 @@ const AgentDashboard = () => {
               color: #666;
               margin-top: 2px;
             }
+            .connection-status {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 15px;
+            }
+            .status-dot {
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+              background: #9333ea;
+            }
+            .status-text {
+              font-size: 12px;
+              color: #666;
+            }
+            .ai-suggestions {
+              background: #f8f9fa;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 15px;
+              margin-bottom: 15px;
+            }
+            .suggestion-item {
+              background: white;
+              border: 1px solid #e2e8f0;
+              border-radius: 6px;
+              padding: 10px;
+              margin-bottom: 8px;
+              cursor: pointer;
+            }
+            .suggestion-title {
+              font-weight: 600;
+              color: #9333ea;
+              font-size: 13px;
+              margin-bottom: 4px;
+            }
+            .suggestion-text {
+              font-size: 12px;
+              color: #666;
+            }
             .action-buttons {
               display: flex;
               gap: 8px;
@@ -317,339 +277,171 @@ const AgentDashboard = () => {
               cursor: pointer;
               font-size: 11px;
               font-weight: 600;
-              transition: all 0.2s ease;
-              box-shadow: 0 1px 2px rgba(147, 51, 234, 0.1);
-            }
-            .action-btn:hover {
-              background: #9333ea;
-              color: white;
-              transform: translateY(-1px);
-              box-shadow: 0 4px 8px rgba(147, 51, 234, 0.2);
-            }
-            .connection-status {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-bottom: 15px;
-            }
-            .status-dot {
-              width: 10px;
-              height: 10px;
-              border-radius: 50%;
-              background: #9333ea;
-              box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
-              animation: pulse-dot 2s infinite;
-            }
-            @keyframes pulse-dot {
-              0%, 100% {
-                box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
-              }
-              50% {
-                box-shadow: 0 0 0 6px rgba(147, 51, 234, 0.1);
-              }
-            }
-            .status-text {
-              font-size: 12px;
-              color: #666;
             }
           </style>
         </head>
         <body>
-          <div class="dashboard-layout">
-            <!-- Header -->
-            <div class="dashboard-header">
-              <div class="header-title">Agent Dashboard</div>
-              <div class="agent-status-dropdown">
-                <select class="status-select" id="agentStatus" onchange="updateAgentStatus()">
-                  <option value="available">Available</option>
-                  <option value="busy">Busy</option>
-                  <option value="offline">Offline</option>
-                </select>
+          <div class="login-container">
+            <h2>Agent Login</h2>
+            <form onsubmit="handleLogin(event)">
+              <div class="form-group">
+                <input type="text" id="username" placeholder="Username" required>
               </div>
-            </div>
-
-            <!-- Left Panel: Agent Chat -->
-            <div class="left-panel">
-              <div class="panel-title">Active Chat Session</div>
-              <div class="connection-status">
-                <div class="status-dot" id="connectionDot"></div>
-                <span class="status-text" id="connectionText">Connected to WebSocket</span>
+              <div class="form-group">
+                <input type="password" id="password" placeholder="Password" required>
               </div>
-              <div class="chat-container">
-                <div class="chat-messages" id="chatMessages">
-                  <div class="message bot">Select a customer from the queue to start chatting</div>
-                </div>
-                <div class="chat-input">
-                  <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
-                  <button onclick="sendMessage()">Send</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Middle Panel: Customer Queue -->
-            <div class="middle-panel">
-              <div class="panel-title">Customer Queue & Sessions</div>
-              <div class="stats-grid">
-                <div class="stat-card">
-                  <div class="stat-number" id="activeCount">3</div>
-                  <div class="stat-label">Active</div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-number" id="queueCount">5</div>
-                  <div class="stat-label">In Queue</div>
-                </div>
-              </div>
-              <div class="customer-queue" id="customerQueue">
-                <!-- Queue items will be populated here -->
-              </div>
-            </div>
-
-            <!-- Right Panel: AI Agent Assistant -->
-            <div class="right-panel">
-              <div class="panel-title">AI Agent Assistant</div>
-              <div class="ai-suggestions">
-                <div class="suggestion-item" onclick="applySuggestion('greeting')">
-                  <div class="suggestion-title">Greeting Template</div>
-                  <div class="suggestion-text">Hello! How can I assist you today?</div>
-                </div>
-                <div class="suggestion-item" onclick="applySuggestion('leave_policy')">
-                  <div class="suggestion-title">Leave Policy Info</div>
-                  <div class="suggestion-text">Employees get 20 paid leaves annually...</div>
-                </div>
-                <div class="suggestion-item" onclick="applySuggestion('escalate')">
-                  <div class="suggestion-title">Escalation</div>
-                  <div class="suggestion-text">Let me connect you with a supervisor...</div>
-                </div>
-              </div>
-              <div class="action-buttons">
-                <button class="action-btn" onclick="transferChat()">Transfer</button>
-                <button class="action-btn" onclick="escalateChat()">Escalate</button>
-                <button class="action-btn" onclick="endChat()">End Chat</button>
-              </div>
-            </div>
+              <div class="error-message" id="errorMessage">Invalid credentials</div>
+              <button type="submit" class="login-btn">Login</button>
+            </form>
           </div>
-
+          
           <script>
-            let ws = null;
-            let currentSessionId = null;
-            let agentStatus = 'available';
-            
-            // Initialize WebSocket connection
-            function initWebSocket() {
-              ws = new WebSocket('ws://localhost:8080');
+            function handleLogin(event) {
+              event.preventDefault();
+              const username = document.getElementById('username').value;
+              const password = document.getElementById('password').value;
               
-              ws.onopen = function() {
-                console.log('Agent connected to WebSocket');
-                updateConnectionStatus(true);
-                // Identify as agent
-                ws.send(JSON.stringify({
-                  type: 'agent_connect',
-                  agentId: 'agent-001'
-                }));
-              };
-              
-              ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'queue_update') {
-                  updateCustomerQueue(data.queue);
-                } else if (data.type === 'agent_connected') {
-                  console.log('Agent connected:', data.agentId);
-                  updateCustomerQueue(data.queue);
-                } else {
-                  displayMessage(data.response || data.message, 'bot');
-                }
-              };
-              
-              ws.onclose = function() {
-                console.log('WebSocket connection closed');
-                updateConnectionStatus(false);
-              };
-              
-              ws.onerror = function(error) {
-                console.error('WebSocket error:', error);
-                updateConnectionStatus(false);
-              };
-            }
-            
-            function updateConnectionStatus(connected) {
-              const dot = document.getElementById('connectionDot');
-              const text = document.getElementById('connectionText');
-              
-              if (connected) {
-                dot.style.background = '#9333ea';
-                dot.style.boxShadow = '0 0 0 3px rgba(147, 51, 234, 0.2)';
-                text.textContent = 'Connected to WebSocket';
-                text.style.color = '#9333ea';
+              if (username === 'agent' && password === 'password') {
+                loadDashboard();
               } else {
-                dot.style.background = '#dc3545';
-                dot.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.2)';
-                text.textContent = 'Disconnected';
-                text.style.color = '#dc3545';
+                document.getElementById('errorMessage').style.display = 'block';
               }
             }
             
-            function sendMessage() {
-              const input = document.getElementById('messageInput');
-              const message = input.value.trim();
+            function loadDashboard() {
+              document.body.style.background = '#f8f9fa';
+              document.body.style.height = '100vh';
+              document.body.style.overflow = 'hidden';
+              document.body.style.display = 'block';
               
-              if (message && ws && ws.readyState === WebSocket.OPEN) {
-                displayMessage(message, 'user');
-                ws.send(JSON.stringify({
-                  message: message,
-                  sessionId: currentSessionId || 'agent-session',
-                  agentId: 'agent-001'
-                }));
-                input.value = '';
-              }
-            }
-            
-            function handleKeyPress(event) {
-              if (event.key === 'Enter') {
-                sendMessage();
-              }
-            }
-            
-            function displayMessage(text, sender) {
-              const messagesContainer = document.getElementById('chatMessages');
-              const messageDiv = document.createElement('div');
-              messageDiv.className = \`message \${sender}\`;
-              messageDiv.textContent = text;
-              messagesContainer.appendChild(messageDiv);
-              messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-            
-            function updateAgentStatus() {
-              const select = document.getElementById('agentStatus');
-              agentStatus = select.value;
-              console.log('Agent status changed to:', agentStatus);
-              
-              // Update queue assignment based on status
-              if (agentStatus === 'available') {
-                assignNextCustomer();
-              }
-            }
-            
-            function assignNextCustomer() {
-              // Round-robin assignment logic
-              const queueItems = document.querySelectorAll('.queue-item');
-              const waitingCustomers = Array.from(queueItems).filter(item => 
-                !item.classList.contains('active')
-              );
-              
-              if (waitingCustomers.length > 0 && agentStatus === 'available') {
-                const nextCustomer = waitingCustomers[0];
-                nextCustomer.classList.add('active');
-                nextCustomer.querySelector('.queue-status').textContent = 'In Progress';
-                nextCustomer.querySelector('.queue-status').className = 'queue-status in-progress';
-                
-                // Update session ID
-                currentSessionId = nextCustomer.dataset.sessionId;
-                console.log('Assigned customer:', currentSessionId);
-              }
-            }
-            
-            function applySuggestion(type) {
-              const input = document.getElementById('messageInput');
-              
-              switch(type) {
-                case 'greeting':
-                  input.value = 'Hello! How can I assist you today?';
-                  break;
-                case 'leave_policy':
-                  input.value = 'Employees get 20 paid leaves annually. Would you like to check your leave balance?';
-                  break;
-                case 'escalate':
-                  input.value = 'Let me connect you with a supervisor who can better assist you.';
-                  break;
-              }
-            }
-            
-            function transferChat() {
-              console.log('Transferring chat to another agent');
-              alert('Chat transfer initiated');
-            }
-            
-            function escalateChat() {
-              console.log('Escalating chat to supervisor');
-              alert('Chat escalated to supervisor');
-            }
-            
-            function endChat() {
-              if (currentSessionId) {
-                console.log('Ending chat session:', currentSessionId);
-                // Remove from queue
-                const activeItem = document.querySelector('.queue-item.active');
-                if (activeItem) {
-                  activeItem.remove();
-                }
-                currentSessionId = null;
-                
-                // Clear chat
-                document.getElementById('chatMessages').innerHTML = 
-                  '<div class="message bot">Select a customer from the queue to start chatting</div>';
-                
-                // Assign next customer
-                setTimeout(assignNextCustomer, 1000);
-              }
-            }
-            
-            function updateCustomerQueue(queueData) {
-              const queue = document.getElementById('customerQueue');
-              queue.innerHTML = '';
-              
-              queueData.forEach((customer, index) => {
-                const waitMinutes = Math.floor((Date.now() - customer.timestamp * 1000) / 60000);
-                const item = document.createElement('div');
-                item.className = 'queue-item';
-                item.dataset.sessionId = customer.id;
-                
-                item.innerHTML = \`
-                  <div class="customer-info">
-                    <span class="customer-name">\${customer.name}</span>
-                    <span class="wait-time">\${waitMinutes} min</span>
+              document.body.innerHTML = \`
+                <div class="dashboard-layout">
+                  <div class="dashboard-header">
+                    <div class="header-title">Agent Dashboard</div>
+                    <select class="status-select" id="agentStatus" onchange="updateAgentStatus()">
+                      <option value="available">Available</option>
+                      <option value="busy">Busy</option>
+                      <option value="offline">Offline</option>
+                    </select>
                   </div>
-                  <div class="customer-query">\${customer.query}</div>
-                  <div class="queue-status">Waiting</div>
-                \`;
-                
-                item.onclick = function() {
-                  takeCustomer(customer.id);
-                };
-                
-                queue.appendChild(item);
-              });
+
+                  <div class="left-panel">
+                    <div class="panel-title">Active Chat Session</div>
+                    <div class="connection-status">
+                      <div class="status-dot" id="connectionDot"></div>
+                      <span class="status-text" id="connectionText">Ready to connect</span>
+                    </div>
+                    <div class="chat-container">
+                      <div class="chat-messages" id="chatMessages">
+                        <div class="message bot">Welcome! You are now logged in as an agent.</div>
+                      </div>
+                      <div class="chat-input">
+                        <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+                        <button onclick="sendMessage()">Send</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="middle-panel">
+                    <div class="panel-title">Customer Queue & Sessions</div>
+                    <div class="stats-grid">
+                      <div class="stat-card">
+                        <div class="stat-number" id="activeCount">0</div>
+                        <div class="stat-label">Active</div>
+                      </div>
+                      <div class="stat-card">
+                        <div class="stat-number" id="queueCount">0</div>
+                        <div class="stat-label">In Queue</div>
+                      </div>
+                    </div>
+                    <div class="customer-queue" id="customerQueue">
+                      <div style="text-align: center; color: #666; padding: 20px;">No customers in queue</div>
+                    </div>
+                  </div>
+
+                  <div class="right-panel">
+                    <div class="panel-title">AI Agent Assistant</div>
+                    <div class="ai-suggestions">
+                      <div class="suggestion-item" onclick="applySuggestion('greeting')">
+                        <div class="suggestion-title">Greeting Template</div>
+                        <div class="suggestion-text">Hello! How can I assist you today?</div>
+                      </div>
+                      <div class="suggestion-item" onclick="applySuggestion('leave_policy')">
+                        <div class="suggestion-title">Leave Policy Info</div>
+                        <div class="suggestion-text">Employees get 20 paid leaves annually...</div>
+                      </div>
+                      <div class="suggestion-item" onclick="applySuggestion('escalate')">
+                        <div class="suggestion-title">Escalation</div>
+                        <div class="suggestion-text">Let me connect you with a supervisor...</div>
+                      </div>
+                    </div>
+                    <div class="action-buttons">
+                      <button class="action-btn" onclick="transferChat()">Transfer</button>
+                      <button class="action-btn" onclick="escalateChat()">Escalate</button>
+                      <button class="action-btn" onclick="endChat()">End Chat</button>
+                    </div>
+                  </div>
+                </div>
+              \`;
               
-              // Update stats
-              document.getElementById('queueCount').textContent = queueData.length;
+              initDashboard();
             }
             
-            function takeCustomer(customerId) {
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                  type: 'take_customer',
-                  customerId: customerId
-                }));
+            function initDashboard() {
+              window.sendMessage = function() {
+                const input = document.getElementById('messageInput');
+                const message = input.value.trim();
                 
-                // Clear previous chat and show customer connection
-                document.getElementById('chatMessages').innerHTML = 
-                  '<div class="message bot">Connected to customer. You can now chat with them.</div>';
-                
-                // Mark as active
-                const item = document.querySelector(\`[data-session-id="\${customerId}"]\`);
-                if (item) {
-                  item.classList.add('active');
-                  item.querySelector('.queue-status').textContent = 'In Progress';
-                  item.querySelector('.queue-status').className = 'queue-status in-progress';
-                  currentSessionId = customerId;
+                if (message) {
+                  const messagesContainer = document.getElementById('chatMessages');
+                  const messageDiv = document.createElement('div');
+                  messageDiv.className = 'message user';
+                  messageDiv.textContent = message;
+                  messagesContainer.appendChild(messageDiv);
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                  input.value = '';
                 }
-              }
+              };
+              
+              window.handleKeyPress = function(event) {
+                if (event.key === 'Enter') {
+                  sendMessage();
+                }
+              };
+              
+              window.updateAgentStatus = function() {
+                const select = document.getElementById('agentStatus');
+                console.log('Agent status changed to:', select.value);
+              };
+              
+              window.applySuggestion = function(type) {
+                const input = document.getElementById('messageInput');
+                
+                switch(type) {
+                  case 'greeting':
+                    input.value = 'Hello! How can I assist you today?';
+                    break;
+                  case 'leave_policy':
+                    input.value = 'Employees get 20 paid leaves annually. Would you like to check your leave balance?';
+                    break;
+                  case 'escalate':
+                    input.value = 'Let me connect you with a supervisor who can better assist you.';
+                    break;
+                }
+              };
+              
+              window.transferChat = function() {
+                alert('Chat transfer initiated');
+              };
+              
+              window.escalateChat = function() {
+                alert('Chat escalated to supervisor');
+              };
+              
+              window.endChat = function() {
+                alert('Chat session ended');
+              };
             }
-            
-            // Initialize dashboard
-            window.onload = function() {
-              initWebSocket();
-            };
           </script>
         </body>
         </html>
