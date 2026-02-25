@@ -70,13 +70,20 @@ const AgentDashboard = () => {
               transition: all 0.2s ease;
             }
             .status-select:hover {
-              background: #9333ea;
+              background: #7c3aed;
               color: white;
+              border-color: #7c3aed;
+              box-shadow: 0 4px 8px rgba(147, 51, 234, 0.3);
             }
             .status-select option {
               background: white;
               color: #9333ea;
               padding: 10px;
+            }
+            .status-select option:hover {
+              background: #7c3aed;
+              color: white;
+              box-shadow: 0 2px 4px rgba(147, 51, 234, 0.2);
             }
             .left-panel, .middle-panel, .right-panel {
               background: white;
@@ -354,9 +361,9 @@ const AgentDashboard = () => {
               <div class="header-title">Agent Dashboard</div>
               <div class="agent-status-dropdown">
                 <select class="status-select" id="agentStatus" onchange="updateAgentStatus()">
-                  <option value="available">🟢 Available</option>
-                  <option value="busy">🟡 Busy</option>
-                  <option value="offline">🔴 Offline</option>
+                  <option value="available">Available</option>
+                  <option value="busy">Busy</option>
+                  <option value="offline">Offline</option>
                 </select>
               </div>
             </div>
@@ -370,7 +377,7 @@ const AgentDashboard = () => {
               </div>
               <div class="chat-container">
                 <div class="chat-messages" id="chatMessages">
-                  <div class="message bot">Hi! I am your bot. Ask your queries.</div>
+                  <div class="message bot">Select a customer from the queue to start chatting</div>
                 </div>
                 <div class="chat-input">
                   <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
@@ -580,7 +587,7 @@ const AgentDashboard = () => {
                 
                 // Clear chat
                 document.getElementById('chatMessages').innerHTML = 
-                  '<div class="message bot">Hi! I am your bot. Ask your queries.</div>';
+                  '<div class="message bot">Select a customer from the queue to start chatting</div>';
                 
                 // Assign next customer
                 setTimeout(assignNextCustomer, 1000);
@@ -623,6 +630,10 @@ const AgentDashboard = () => {
                   type: 'take_customer',
                   customerId: customerId
                 }));
+                
+                // Clear previous chat and show customer connection
+                document.getElementById('chatMessages').innerHTML = 
+                  '<div class="message bot">Connected to customer. You can now chat with them.</div>';
                 
                 // Mark as active
                 const item = document.querySelector(\`[data-session-id="\${customerId}"]\`);
