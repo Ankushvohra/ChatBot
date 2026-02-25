@@ -2,11 +2,16 @@ import boto3
 import os
 import time
 
-aws_profile = os.getenv('AWS_PROFILE', 'core-sandbox1')
-aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
+# aws_profile = os.getenv('AWS_PROFILE', 'core-sandbox1')
+# aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
 
-# Initialize Bedrock agent client
-bedrock_agent = boto3.client('bedrock-agent-runtime')
+# # Initialize Bedrock agent client
+# bedrock_agent = boto3.client('bedrock-agent-runtime')
+
+# Initialize Bedrock agent client with profile
+session = boto3.Session(profile_name="core-sandbox1", region_name="us-east-1")
+bedrock_agent = session.client('bedrock-agent-runtime')
+
 
 def detect_intent(message):
     """Detect if user wants to connect to human agent"""
@@ -53,7 +58,7 @@ def invoke_bedrock_agent(user_message, session_id):
         print(f"Bedrock error after {response_time:.2f} seconds: {e}")
         return "Sorry, I'm having trouble processing your request right now."
 
-def handle_intent(intent, websocket_id, user_message="", session_id=None):
+def handle_intent(intent, user_message="", session_id=None):
     """Handle the detected intent"""
     if intent == "human_agent":
         return {
@@ -61,7 +66,9 @@ def handle_intent(intent, websocket_id, user_message="", session_id=None):
         }
     
     elif intent == "bedrock":
-        bedrock_response = invoke_bedrock_agent(user_message, session_id or str(websocket_id))
+        if not session_id:
+            session_id = "default-session"
+        bedrock_response = invoke_bedrock_agent(user_message, session_id)
         return {"response": bedrock_response}
     
     else:

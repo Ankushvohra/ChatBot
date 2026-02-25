@@ -4,7 +4,6 @@ import websockets
 from chatbot_logic import detect_intent, handle_intent
 
 async def handler(websocket):
-    websocket_id = id(websocket)
     session_id = None
     
     try:
@@ -31,12 +30,12 @@ async def handler(websocket):
             
             # Detect intent and handle
             intent = detect_intent(user_message)
-            response = handle_intent(intent, websocket_id, user_message, session_id)
+            response = handle_intent(intent, user_message, session_id)
             
             await websocket.send(json.dumps(response))
     
     except websockets.exceptions.ConnectionClosed:
-        print(f"Client disconnected - ID: {websocket_id}")
+        print(f"Session ended due to connection close - Session ID: {session_id}")
 
 async def main():
     async with websockets.serve(handler, "localhost", 8080):
