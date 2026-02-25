@@ -39,10 +39,16 @@ const AgentDashboard = () => {
             }
             .login-container h2 {
               text-align: center;
-              margin-bottom: 30px;
+              margin-bottom: 10px;
               color: #9333ea;
               font-size: 24px;
               font-weight: 600;
+            }
+            .login-container p {
+              text-align: center;
+              margin-bottom: 30px;
+              color: #666;
+              font-size: 14px;
             }
             .form-group {
               margin-bottom: 20px;
@@ -72,8 +78,12 @@ const AgentDashboard = () => {
               cursor: pointer;
               transition: background-color 0.2s ease;
             }
-            .login-btn:hover {
+            .login-btn:hover:not(:disabled) {
               background: #7c3aed;
+            }
+            .login-btn:disabled {
+              opacity: 0.6;
+              cursor: not-allowed;
             }
             .error-message {
               color: #dc3545;
@@ -84,6 +94,18 @@ const AgentDashboard = () => {
               background: #f8d7da;
               border-radius: 4px;
               display: none;
+            }
+            .demo-credentials {
+              margin-top: 20px;
+              text-align: center;
+            }
+            .demo-credentials p {
+              font-size: 12px;
+              color: #9ca3af;
+              background: #f3f4f6;
+              padding: 8px;
+              border-radius: 4px;
+              margin: 4px 0;
             }
             
             /* Dashboard Styles */
@@ -110,6 +132,12 @@ const AgentDashboard = () => {
             .header-title {
               font-size: 16px;
               font-weight: 600;
+            }
+            .user-info {
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              font-size: 12px;
             }
             .status-select {
               background: white;
@@ -281,48 +309,87 @@ const AgentDashboard = () => {
           </style>
         </head>
         <body>
-          <div class="login-container">
+          <div class="login-container" id="loginContainer">
             <h2>Agent Login</h2>
+            <p>Please sign in to access the dashboard</p>
             <form onsubmit="handleLogin(event)">
               <div class="form-group">
-                <input type="text" id="username" placeholder="Username" required>
+                <input type="email" id="email" placeholder="Email" required>
               </div>
               <div class="form-group">
                 <input type="password" id="password" placeholder="Password" required>
               </div>
-              <div class="error-message" id="errorMessage">Invalid credentials</div>
-              <button type="submit" class="login-btn">Login</button>
+              <div class="error-message" id="errorMessage"></div>
+              <button type="submit" class="login-btn" id="loginBtn">Login</button>
             </form>
+            <div class="demo-credentials">
+              <p><strong>Demo Accounts:</strong></p>
+              <p>Admin: admin@company.com / Admin123!</p>
+              <p>Agent: agent1@company.com / Agent123!</p>
+            </div>
           </div>
           
           <script>
-            function handleLogin(event) {
+            let currentUser = null;
+            
+            async function handleLogin(event) {
               event.preventDefault();
-              const username = document.getElementById('username').value;
-              const password = document.getElementById('password').value;
               
-              if (username === 'agent' && password === 'password') {
-                loadDashboard();
-              } else {
-                document.getElementById('errorMessage').style.display = 'block';
+              const email = document.getElementById('email').value;
+              const password = document.getElementById('password').value;
+              const errorDiv = document.getElementById('errorMessage');
+              const loginBtn = document.getElementById('loginBtn');
+              
+              loginBtn.disabled = true;
+              loginBtn.textContent = 'Signing in...';
+              errorDiv.style.display = 'none';
+              
+              try {
+                const response = await fetch('http://localhost:5001/api/auth/login', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email, password }),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                  currentUser = data.user;
+                  loadDashboard();
+                } else {
+                  errorDiv.textContent = data.error || 'Login failed';
+                  errorDiv.style.display = 'block';
+                }
+              } catch (error) {
+                errorDiv.textContent = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
               }
+              
+              loginBtn.disabled = false;
+              loginBtn.textContent = 'Login';
             }
             
             function loadDashboard() {
+              const dashboardTitle = currentUser.role === 'admin' ? 'Admin Dashboard' : 'Agent Dashboard';
+              
               document.body.style.background = '#f8f9fa';
               document.body.style.height = '100vh';
               document.body.style.overflow = 'hidden';
               document.body.style.display = 'block';
+              document.title = dashboardTitle + ' - ' + currentUser.name;
               
               document.body.innerHTML = \`
                 <div class="dashboard-layout">
                   <div class="dashboard-header">
-                    <div class="header-title">Agent Dashboard</div>
-                    <select class="status-select" id="agentStatus" onchange="updateAgentStatus()">
-                      <option value="available">Available</option>
-                      <option value="busy">Busy</option>
-                      <option value="offline">Offline</option>
-                    </select>
+                    <div class="header-title">\${dashboardTitle} - \${currentUser.name}</div>
+                    <div class="user-info">
+                      <span>Role: \${currentUser.role.toUpperCase()}</span>
+                      <select class="status-select" id="agentStatus" onchange="updateAgentStatus()">
+                        <option value="available">Available</option>
+                        <option value="busy">Busy</option>
+                        <option value="offline">Offline</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div class="left-panel">
@@ -333,7 +400,7 @@ const AgentDashboard = () => {
                     </div>
                     <div class="chat-container">
                       <div class="chat-messages" id="chatMessages">
-                        <div class="message bot">Welcome! You are now logged in as an agent.</div>
+                        <div class="message bot">Welcome \${currentUser.name}! You are logged in as \${currentUser.role}.</div>
                       </div>
                       <div class="chat-input">
                         <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
