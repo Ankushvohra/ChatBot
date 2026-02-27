@@ -455,59 +455,114 @@ const AgentDashboard = () => {
             }
             
             function initDashboard() {
+              let ws = null;
+              let currentSessionId = null;
+              
+              function initWebSocket() {
+                ws = new WebSocket('ws://localhost:8080');
+                
+                ws.onopen = function() {
+                  ws.send(JSON.stringify({ 
+                    type: 'agent_connect', 
+                    agentId: 'agent-001',
+                    role: currentUser.role,
+                    userId: currentUser.uid
+                  }));
+                  document.getElementById('connectionText').textContent = 'Connected';
+                  document.getElementById('connectionDot').style.background = '#22c55e';
+                };
+                
+                ws.onmessage = function(event) {
+                  const data = JSON.parse(event.data);
+                  
+                  if (data.type === 'session_limit_error') {
+                    alert(data.message);
+                    window.close();
+                    return;
+                  }
+                  
+                  if (data.type === 'user_connected') {
+                    currentSessionId = data.sessionId;
+                    appendMessage('System: User connected - ' + data.sessionId, 'bot');
+                  } else if (data.type === 'user_message') {
+                    appendMessage('User: ' + data.message, 'bot');
+                  } else if (data.type === 'agent_connected' || data.type === 'stats_update') {
+                    document.getElementById('activeCount').textContent = data.activeCount || 0;
+                    document.getElementById('queueCount').textContent = data.queueCount || 0;
+                    
+                    // Update queue display
+                    const queueContainer = document.getElementById('customerQueue');
+                    if (data.queue && data.queue.length > 0) {
+                      queueContainer.innerHTML = data.queue.map(customer => 
+                        '<div style="padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 4px; font-size: 12px;">' +
+                          '<strong>Customer:</strong> ' + customer.id.substring(0, 8) + '...<br>' +
+                          '<span style="color: #666;">Waiting: ' + customer.waiting_time + '</span>' +
+                        '</div>'
+                      ).join('');
+                    } else {
+                      queueContainer.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No customers in queue</div>';
+                    }
+                  }
+                };
+                
+                ws.onclose = function() {
+                  document.getElementById('connectionText').textContent = 'Disconnected';
+                  document.getElementById('connectionDot').style.background = '#dc3545';
+                };
+              }
+              
+              function appendMessage(text, type) {
+                const container = document.getElementById('chatMessages');
+                const div = document.createElement('div');
+                div.className = 'message ' + type;
+                div.textContent = text;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+              }
+              
               window.sendMessage = function() {
                 const input = document.getElementById('messageInput');
                 const message = input.value.trim();
-                
-                if (message) {
-                  const messagesContainer = document.getElementById('chatMessages');
-                  const messageDiv = document.createElement('div');
-                  messageDiv.className = 'message user';
-                  messageDiv.textContent = message;
-                  messagesContainer.appendChild(messageDiv);
-                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                if (message && ws && ws.readyState === WebSocket.OPEN && currentSessionId) {
+                  ws.send(JSON.stringify({ type: 'agent_message', sessionId: currentSessionId, message }));
+                  appendMessage('You: ' + message, 'user');
                   input.value = '';
                 }
               };
               
               window.handleKeyPress = function(event) {
-                if (event.key === 'Enter') {
-                  sendMessage();
-                }
+                if (event.key === 'Enter') sendMessage();
               };
               
               window.updateAgentStatus = function() {
-                const select = document.getElementById('agentStatus');
-                console.log('Agent status changed to:', select.value);
+                const status = document.getElementById('agentStatus').value;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'agent_status', status }));
+                }
               };
               
               window.applySuggestion = function(type) {
                 const input = document.getElementById('messageInput');
-                
-                switch(type) {
-                  case 'greeting':
-                    input.value = 'Hello! How can I assist you today?';
-                    break;
-                  case 'leave_policy':
-                    input.value = 'Employees get 20 paid leaves annually. Would you like to check your leave balance?';
-                    break;
-                  case 'escalate':
-                    input.value = 'Let me connect you with a supervisor who can better assist you.';
-                    break;
-                }
-              };
-              
-              window.transferChat = function() {
-                alert('Chat transfer initiated');
-              };
-              
-              window.escalateChat = function() {
-                alert('Chat escalated to supervisor');
+                const suggestions = {
+                  greeting: 'Hello! How can I assist you today?',
+                  leave_policy: 'Employees get 20 paid leaves annually.',
+                  escalate: 'Let me connect you with a supervisor.'
+                };
+                input.value = suggestions[type] || '';
               };
               
               window.endChat = function() {
-                alert('Chat session ended');
+                if (currentSessionId && ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'end_chat', sessionId: currentSessionId }));
+                  appendMessage('System: Chat ended by agent', 'bot');
+                  currentSessionId = null;
+                }
               };
+              
+              window.transferChat = function() { alert('Transfer initiated'); };
+              window.escalateChat = function() { alert('Escalated to supervisor'); };
+              
+              initWebSocket();
             }
           </script>
         </body>

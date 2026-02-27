@@ -1,6 +1,24 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
+import ssl
+import urllib3
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# Disable SSL warnings and create custom session
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+class SSLAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+session = requests.Session()
+session.mount('https://', SSLAdapter())
 import jwt
 from datetime import datetime, timedelta
 
@@ -24,9 +42,10 @@ def login():
         
         # Authenticate with Supabase REST API
         auth_url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
-        auth_response = requests.post(auth_url, 
+        auth_response = session.post(auth_url, 
             headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
-            json={"email": email, "password": password}
+            json={"email": email, "password": password},
+            timeout=30
         )
         
         if auth_response.status_code == 200:
@@ -38,8 +57,9 @@ def login():
             
             # Get user profile
             profile_url = f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}&select=*"
-            profile_response = requests.get(profile_url,
-                headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {access_token}"}
+            profile_response = session.get(profile_url,
+                headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {access_token}"},
+                timeout=30
             )
             
             if profile_response.status_code == 200:

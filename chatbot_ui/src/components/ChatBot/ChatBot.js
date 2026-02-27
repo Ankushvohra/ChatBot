@@ -220,6 +220,25 @@ const ChatBot = () => {
       try {
         const data = JSON.parse(event.data);
         
+        if (data.type === 'agent_ack') {
+          setIsWaiting(false);
+          return;
+        }
+        
+        if (data.type === 'chat_ended') {
+          setMessages(prev => [...prev, { text: data.message, sender: 'bot', time: new Date() }]);
+          setIsWaiting(false);
+          // Disable chat input
+          setInputText('');
+          // Show a modal or disable the interface
+          setTimeout(() => {
+            if (window.confirm('Chat has been ended by the agent. Would you like to start a new chat?')) {
+              window.location.reload();
+            }
+          }, 2000);
+          return;
+        }
+        
         if (data.type === 'session_expired') {
           setIsSessionExpired(true);
           setShowSessionExpiredModal(true);
