@@ -1,126 +1,328 @@
 import asyncio
 import json
-import time
 import websockets
-from chatbot_logic import (
-    detect_intent, 
-    extract_employee_id, 
-    is_affirmative, 
-    get_employee_leave_balance, 
-    get_all_employees_leave,
-    handle_intent
-)
+from chatbot_logic import detect_intent, handle_intent
 
-user_sessions = {}
-session_timestamps = {}
-SESSION_TIMEOUT = 300  # 5 minutes
+# State
+available_agents = {}   # agent_id -> websocket (free agents)
+all_agents = {}         # agent_id -> websocket (all connected agents)
+agent_status = {}       # agent_id -> status (available/busy/offline)
+active_sessions = {}    # user_id -> agent_id (track active sessions per user)
+user_sessions = {}      # session_id -> { ws, paired_agent, history }
+user_queue = []         # list of session_ids waiting for agent
 
-async def check_session_timeout(websocket, websocket_id):
-    """Check if session has expired and notify client"""
-    while websocket_id in session_timestamps:
-        await asyncio.sleep(10)  # Check every 10 seconds
-        
-        if websocket_id in session_timestamps:
-            last_activity = session_timestamps[websocket_id]
-            elapsed = time.time() - last_activity
-            
-            if elapsed > SESSION_TIMEOUT:
-                try:
-                    await websocket.send(json.dumps({
-                        "type": "session_expired",
-                        "response": "Session expired due to inactivity. Please refresh to continue."
-                    }))
-                    await asyncio.sleep(0.5)
-                    await websocket.close(1000, "Session timeout")
-                except Exception as e:
-                    print(f"Error closing session {websocket_id}: {e}")
-                
-                user_sessions.pop(websocket_id, None)
-                session_timestamps.pop(websocket_id, None)
-                break
-
-async def process_with_timeout_pause(websocket_id, operation):
-    """Handle long-running operations"""
-    await operation
+async def assign_agent_to_user(waiting_session, agent_id, agent_ws):
+    user_sessions[waiting_session]["paired_agent"] = agent_id
+    available_agents.pop(agent_id, None)
+    agent_status[agent_id] = "busy"  # Set agent as busy
+    user_ws = user_sessions[waiting_session]["ws"]
+    await user_ws.send(json.dumps({
+        "type": "response",
+        "message": "You are now connected to a live agent. How can I help you?"
+    }))
+    # Clear previous chat and send new user connection
+    await agent_ws.send(json.dumps({
+        "type": "clear_chat"
+    }))
+    await agent_ws.send(json.dumps({
+        "type": "user_connected",
+        "sessionId": waiting_session,
+        "history": user_sessions[waiting_session]["history"]
+    }))
+    
+    # Notify all agents about updated queue and active counts
+    for aid, aws in all_agents.items():
+        await aws.send(json.dumps({
+            "type": "stats_update",
+            "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent")]),
+            "queueCount": len(user_queue),
+            "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+        }))
+    
+    print(f"Assigned {waiting_session} to {agent_id} (Status: {agent_status[agent_id]})")
 
 async def handler(websocket):
-    websocket_id = id(websocket)
     session_id = None
-    
+    agent_id = None
+
     try:
         async for message in websocket:
-            print("Received:", message)
-            
             try:
                 data = json.loads(message)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = data.get("type")
+
+            # --- Agent connects ---
+            if msg_type == "agent_connect":
+                agent_id = data.get("agentId", "agent-001")
+                user_role = data.get("role", "agent")  # Get user role
+                user_id = data.get("userId")  # Get user ID
                 
-                # Capture session ID from first message
+                # Check if non-admin user already has active session
+                if user_role != "admin" and user_id in active_sessions:
+                    await websocket.send(json.dumps({
+                        "type": "session_limit_error",
+                        "message": "You can only have one active session. Please close other windows."
+                    }))
+                    await websocket.close()
+                    return
+                
+                # Generate unique agent_id for each session
+                if user_role != "admin":
+                    agent_id = f"{user_id}-session"
+                    active_sessions[user_id] = agent_id
+                else:
+                    # Admin can have multiple sessions with unique IDs
+                    import time
+                    agent_id = f"{user_id}-{int(time.time())}"
+                
+                available_agents[agent_id] = websocket
+                all_agents[agent_id] = websocket
+                agent_status[agent_id] = "available"  # Set initial status
+                print(f"Agent connected: {agent_id} (Role: {user_role})")
+
+                # No auto-assignment on connect - agents must manually connect
+
+                await websocket.send(json.dumps({
+                    "type": "agent_connected",
+                    "agentId": agent_id,
+                    "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent")]),
+                    "queueCount": len(user_queue),
+                    "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                }))
+
+            # --- Agent sends message to user ---
+            elif msg_type == "agent_message":
+                target_session = data.get("sessionId")
+                msg_text = data.get("message", "")
+                if target_session and target_session in user_sessions:
+                    user_sessions[target_session]["history"].append({"sender": "agent", "message": msg_text})
+                    await user_sessions[target_session]["ws"].send(json.dumps({
+                        "type": "response",
+                        "message": f"Agent: {msg_text}"
+                    }))
+            
+            # --- Manual connect next user from queue ---
+            elif msg_type == "manual_connect":
+                if (user_queue and agent_id and agent_status.get(agent_id) == "available"):
+                    waiting_session = user_queue.pop(0)
+                    if waiting_session in user_sessions:
+                        await assign_agent_to_user(waiting_session, agent_id, websocket)
+
+            # --- Agent ends chat ---
+            elif msg_type == "end_chat":
+                target_session = data.get("sessionId")
+                if target_session and target_session in user_sessions:
+                    # Immediately unpair agent and make available
+                    if user_sessions[target_session].get("paired_agent") == agent_id:
+                        user_sessions[target_session]["paired_agent"] = None
+                        agent_status[agent_id] = "available"
+                        available_agents[agent_id] = websocket
+                        
+                        # Notify agent that chat ended
+                        await websocket.send(json.dumps({
+                            "type": "chat_ended_by_agent",
+                            "sessionId": target_session
+                        }))
+                    
+                    # Ask user for feedback
+                    await user_sessions[target_session]["ws"].send(json.dumps({
+                        "type": "feedback_request",
+                        "message": "Agent has marked this chat as resolved. Is your issue resolved?"
+                    }))
+                    
+                    # Update stats for all agents
+                    for aid, aws in all_agents.items():
+                        await aws.send(json.dumps({
+                            "type": "stats_update",
+                            "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent")]),
+                            "queueCount": len(user_queue),
+                            "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                        }))
+
+            # --- Agent sets status ---
+            elif msg_type == "agent_status":
+                if agent_id:
+                    status = data.get("status")
+                    agent_status[agent_id] = status
+                    
+                    if status == "available":
+                        # Add back to available agents if not already there
+                        if agent_id not in available_agents:
+                            available_agents[agent_id] = websocket
+                    else:
+                        # Remove from available agents if busy/offline
+                        available_agents.pop(agent_id, None)
+
+            # --- User disconnect ---
+            elif msg_type == "user_disconnect":
+                if session_id and session_id in user_sessions:
+                    paired_agent = user_sessions[session_id].get("paired_agent")
+                    if paired_agent:
+                        # Notify agent that user disconnected
+                        if paired_agent in all_agents:
+                            await all_agents[paired_agent].send(json.dumps({
+                                "type": "user_disconnected",
+                                "sessionId": session_id,
+                                "message": "User has disconnected from the chat"
+                            }))
+                        
+                        # Make agent available again
+                        if paired_agent in agent_status:
+                            agent_status[paired_agent] = "available"
+                            if paired_agent in all_agents:
+                                available_agents[paired_agent] = all_agents[paired_agent]
+                        
+                        # Update stats for all agents
+                        for aid, aws in all_agents.items():
+                            await aws.send(json.dumps({
+                                "type": "stats_update",
+                                "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent") and s != user_sessions[session_id]]),
+                                "queueCount": len(user_queue),
+                                "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                            }))
+                    
+                    # Remove user session
+                    user_sessions.pop(session_id, None)
+                break
+
+            # --- User feedback response ---
+            elif msg_type == "feedback_response":
+                feedback = data.get("resolved")  # true or false
+                
+                if feedback:  # User says issue is resolved
+                    # End chat and make agent available
+                    if session_id in user_sessions and user_sessions[session_id].get("paired_agent"):
+                        paired_agent = user_sessions[session_id]["paired_agent"]
+                        user_sessions[session_id]["paired_agent"] = None
+                        
+                        # Make agent available
+                        if paired_agent in agent_status:
+                            agent_status[paired_agent] = "available"
+                            if paired_agent in all_agents:
+                                available_agents[paired_agent] = all_agents[paired_agent]
+                        
+                        # Notify agent that chat ended and clear previous chat
+                        if paired_agent in all_agents:
+                            await all_agents[paired_agent].send(json.dumps({
+                                "type": "chat_ended_by_user",
+                                "sessionId": session_id
+                            }))
+                        
+                        # No auto-assignment after feedback - agents must manually connect
+                    
+                    await websocket.send(json.dumps({
+                        "type": "chat_resolved",
+                        "message": "Thank you for your feedback! Chat has been ended."
+                    }))
+                else:  # User wants another agent
+                    # Add to queue - agents must manually connect
+                    if session_id not in user_queue:
+                        user_queue.append(session_id)
+                    position = user_queue.index(session_id) + 1
+                    await websocket.send(json.dumps({
+                        "type": "response",
+                        "message": f"You are #{position} in queue for another agent. Please wait..."
+                    }))
+                    
+                    # Notify all agents about updated queue
+                    for aid, aws in all_agents.items():
+                        await aws.send(json.dumps({
+                            "type": "stats_update",
+                            "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent")]),
+                            "queueCount": len(user_queue),
+                            "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                        }))
+                continue
+
+            # --- User message ---
+            else:
                 if not session_id and data.get("sessionId"):
                     session_id = data.get("sessionId")
-                    print(f"Session started - Session ID: {session_id}")
-                
-                # Handle disconnect message
+                    user_sessions[session_id] = {"ws": websocket, "paired_agent": None, "history": []}
+                    print(f"User session started: {session_id}")
+
                 if data.get("type") == "disconnect":
-                    print(f"Session ended - Session ID: {session_id}")
-                    user_sessions.pop(websocket_id, None)
-                    break  # Exit the loop to close connection
-                
-                user_message = data.get("message", "") if isinstance(data, dict) else str(data)
-            except json.JSONDecodeError as e:
-                print(f"Client disconnected - ID: {websocket_id}, Reason: {e}")
-                user_message = message
-            
-            session_state = user_sessions.get(websocket_id)
-            
-            if session_state == "awaiting_confirmation":
-                if is_affirmative(user_message):
-                    user_sessions[websocket_id] = "awaiting_employee_id"
-                    response = {"response": "Please provide your Employee ID (e.g., EMP001):"}
-                else:
-                    user_sessions.pop(websocket_id, None)
-                    response = {"response": "Okay! Let me know if you need anything else."}
-            
-            elif session_state == "awaiting_employee_id":
-                emp_id = extract_employee_id(user_message)
-                if emp_id:
-                    response = {"response": get_employee_leave_balance(emp_id)}
-                    user_sessions.pop(websocket_id, None)
-                else:
-                    response = {"response": "I couldn't find a valid Employee ID. Please provide it in format EMP001."}
-            
-            else:
-                intent = detect_intent(user_message)
-                response = handle_intent(intent, websocket_id, user_sessions, user_message)
-            
-            # Handle employee leave operation with progress updates
-            if response.get("type") == "employee_leave_operation":
-                async def process_employee_data():
-                    await asyncio.sleep(60)
-                    csv_data = get_all_employees_leave()
+                    break
+
+                user_message = data.get("message", "")
+
+                if session_id and session_id in user_sessions:
+                    user_sessions[session_id]["history"].append({"sender": "user", "message": user_message})
+
+                # If paired with agent, relay via all_agents (not available_agents)
+                if session_id and user_sessions.get(session_id, {}).get("paired_agent"):
+                    paired = user_sessions[session_id]["paired_agent"]
+                    if paired in all_agents:
+                        await all_agents[paired].send(json.dumps({
+                            "type": "user_message",
+                            "sessionId": session_id,
+                            "message": user_message
+                        }))
+                    # Ack to clear isWaiting on user side
+                    await websocket.send(json.dumps({"type": "agent_ack"}))
+                    continue
+
+                # If user is in queue, don't call Bedrock
+                if session_id and session_id in user_queue:
+                    position = user_queue.index(session_id) + 1
                     await websocket.send(json.dumps({
-                        "response": "Here are the leave details for all employees :",
-                        "file": {
-                            "data": csv_data,
-                            "filename": "employee_leave_balance.csv",
-                            "type": "text/csv"
-                        }
+                        "type": "response",
+                        "message": f"You are still #{position} in queue. Please wait for an agent..."
                     }))
-                
-                await process_with_timeout_pause(websocket_id, process_employee_data())
-            else:
-                await websocket.send(json.dumps(response))
-    
+                    continue
+
+                intent = detect_intent(user_message)
+
+                if intent == "human_agent":
+                    # Always add to queue - agents must manually connect
+                    if session_id not in user_queue:
+                        user_queue.append(session_id)
+                    position = user_queue.index(session_id) + 1
+                    await websocket.send(json.dumps({
+                        "type": "response",
+                        "message": f"You are #{position} in queue. An agent will connect with you shortly..."
+                    }))
+                    # Notify all agents about updated queue
+                    for aid, aws in all_agents.items():
+                        await aws.send(json.dumps({
+                            "type": "stats_update",
+                            "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent")]),
+                            "queueCount": len(user_queue),
+                            "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                        }))
+                else:
+                    response = handle_intent(intent, user_message, session_id)
+                    if session_id and session_id in user_sessions:
+                        user_sessions[session_id]["history"].append({"sender": "bot", "message": response.get("response", "")})
+                    await websocket.send(json.dumps(response))
+
     except websockets.exceptions.ConnectionClosed:
-        print(f"Client disconnected - ID: {websocket_id}")
-        user_sessions.pop(websocket_id, None)
+        print(f"Connection closed: session={session_id}, agent={agent_id}")
+    finally:
+        if agent_id:
+            available_agents.pop(agent_id, None)
+            all_agents.pop(agent_id, None)
+            agent_status.pop(agent_id, None)  # Remove agent status
+            
+            # Remove from active sessions if not admin
+            for user_id, session_agent_id in list(active_sessions.items()):
+                if session_agent_id == agent_id:
+                    active_sessions.pop(user_id, None)
+                    break
+                    
+        if session_id and session_id in user_sessions:
+            user_sessions.pop(session_id)
+        if session_id and session_id in user_queue:
+            user_queue.remove(session_id)
+
 
 async def main():
     async with websockets.serve(handler, "localhost", 8080):
-        print("Intent-Based Chatbot running on ws://localhost:8080")
+        print("Chatbot WebSocket running on ws://localhost:8080")
         await asyncio.Future()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nServer stopped by user")
+    asyncio.run(main())

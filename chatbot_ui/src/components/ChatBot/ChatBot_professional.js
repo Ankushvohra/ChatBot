@@ -11,6 +11,8 @@ const ChatBot = () => {
   const [ws, setWs] = useState(null);
   const [size, setSize] = useState({ width: 350, height: 500 });
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [showFeedbackButtons, setShowFeedbackButtons] = useState(false);
+  const [chatEnded, setChatEnded] = useState(false);
   const recognitionRef = useRef(null);
   const startSizeRef = useRef({ width: 0, height: 0 });
   const startPosRef = useRef({ x: 0, y: 0 });
@@ -35,9 +37,7 @@ const ChatBot = () => {
   const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
   const inactivityTimerRef = useRef(null);
-  const SESSION_TIMEOUT = 90000; // 90 seconds
-
-
+  const SESSION_TIMEOUT = 300000; // 300 seconds
 
   useEffect(() => {
     keepPopupOpenRef.current = keepPopupOpen;
@@ -92,8 +92,6 @@ const ChatBot = () => {
       setMessages([{ text: "Hi! I am your bot.\nAsk your queries.", sender: 'bot', time: new Date() }]);
     }
   }, [isOpen, messages.length]);
-
-
 
   useEffect(() => {
     if (isWaiting && isRecording) {
@@ -204,6 +202,30 @@ const ChatBot = () => {
     return <span>{parsedText}</span>;
   };
 
+  const handleFeedbackResponse = (resolved) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ 
+        type: 'feedback_response', 
+        resolved: resolved,
+        sessionId 
+      }));
+    }
+    setShowFeedbackButtons(false);
+  };
+
+  const endChat = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
+      ws.close();
+      setWs(null);
+    }
+    setMessages([]);
+    setIsWaiting(false);
+    setIsSessionExpired(false);
+    setChatEnded(false);
+    setIsOpen(false);
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     
@@ -216,9 +238,41 @@ const ChatBot = () => {
     websocket.onclose = () => {
       console.log('WebSocket connection closed');
     };
+    
     websocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        if (data.type === 'agent_ack') {
+          setIsWaiting(false);
+          return;
+        }
+        
+        if (data.type === 'feedback_request') {
+          setMessages(prev => [...prev, { text: data.message, sender: 'bot', time: new Date() }]);
+          setShowFeedbackButtons(true);
+          setIsWaiting(false);
+          return;
+        }
+        
+        if (data.type === 'chat_resolved') {
+          setMessages(prev => [...prev, { text: data.message, sender: 'bot', time: new Date() }]);
+          setChatEnded(true);
+          setIsWaiting(false);
+          return;
+        }
+        
+        if (data.type === 'chat_ended') {
+          setMessages(prev => [...prev, { text: data.message, sender: 'bot', time: new Date() }]);
+          setIsWaiting(false);
+          setInputText('');
+          setTimeout(() => {
+            if (window.confirm('Chat has been ended by the agent. Would you like to start a new chat?')) {
+              window.location.reload();
+            }
+          }, 2000);
+          return;
+        }
         
         if (data.type === 'session_expired') {
           setIsSessionExpired(true);
@@ -383,7 +437,7 @@ const ChatBot = () => {
   };
 
   const sendMessage = () => {
-    if (isSessionExpired) return;
+    if (isSessionExpired || chatEnded) return;
     
     if (inputText.trim() && ws && !isWaiting) {
       setMessages(prev => [...prev, { text: inputText, sender: 'user', time: new Date() }]);
@@ -499,6 +553,76 @@ const ChatBot = () => {
                 </span>
               </div>
             ))}
+            
+            {/* Inline Feedback Buttons */}
+            {showFeedbackButtons && (
+              <div className="message bot">
+                <div className="support-name">Support</div>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  gap: '12px',
+                  padding: '8px 0'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500' }}>
+                    Please rate your experience:
+                  </span>
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '12px',
+                    justifyContent: 'flex-start'
+                  }}>
+                    <button 
+                      onClick={() => handleFeedbackResponse(true)}
+                      style={{ 
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '8px 16px', 
+                        borderRadius: '20px', 
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                      onMouseOver={(e) => e.target.style.transform = 'translateY(-1px)'}
+                      onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                    >
+                      <span>✓</span> Issue Resolved
+                    </button>
+                    <button 
+                      onClick={() => handleFeedbackResponse(false)}
+                      style={{ 
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '8px 16px', 
+                        borderRadius: '20px', 
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                      onMouseOver={(e) => e.target.style.transform = 'translateY(-1px)'}
+                      onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                    >
+                      <span>↻</span> Need Another Agent
+                    </button>
+                  </div>
+                </div>
+                <span className="message-time">
+                  {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
           </div>
           
           {showPopup && (
@@ -613,50 +737,88 @@ const ChatBot = () => {
           
           <div className="chat-input">
             <div className="input-wrapper">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => {
-                  if (!isSessionExpired) {
-                    setInputText(e.target.value);
-                    resetInactivityTimer();
-                  }
-                }}
-                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="Ask me something..."
-                disabled={isWaiting || isSessionExpired}
-              />
-              <button onClick={() => {
-                if (showPopup) {
-                  if (isRecording) {
-                    try {
-                      recognitionRef.current?.stop();
-                    } catch (err) {
-                      console.error('Stop error:', err);
+              {chatEnded ? (
+                <button 
+                  onClick={endChat}
+                  style={{ 
+                    width: '100%', 
+                    background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                    color: 'white', 
+                    border: 'none', 
+                    padding: '14px 20px', 
+                    borderRadius: '8px', 
+                    cursor: 'pointer',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = 'translateY(-1px)';
+                    e.target.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                  </svg>
+                  End Conversation
+                </button>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => {
+                      if (!isSessionExpired) {
+                        setInputText(e.target.value);
+                        resetInactivityTimer();
+                      }
+                    }}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="Ask me something..."
+                    disabled={isWaiting || isSessionExpired}
+                  />
+                  <button onClick={() => {
+                    if (showPopup) {
+                      if (isRecording) {
+                        try {
+                          recognitionRef.current?.stop();
+                        } catch (err) {
+                          console.error('Stop error:', err);
+                        }
+                        clearTimeout(silenceTimerRef.current);
+                        setVolumeLevel(0);
+                        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+                          audioContextRef.current.close();
+                        }
+                        setIsRecording(false);
+                      }
+                      setShowPopup(false);
+                      setLiveTranscript('');
+                    } else {
+                      toggleRecording();
                     }
-                    clearTimeout(silenceTimerRef.current);
-                    setVolumeLevel(0);
-                    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                      audioContextRef.current.close();
-                    }
-                    setIsRecording(false);
-                  }
-                  setShowPopup(false);
-                  setLiveTranscript('');
-                } else {
-                  toggleRecording();
-                }
-              }} className={showPopup ? 'recording' : ''} title="Voice input" disabled={isWaiting || isSessionExpired}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                </svg>
-              </button>
-              <button onClick={sendMessage} title="Send message" disabled={isWaiting || isSessionExpired}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                </svg>
-              </button>
+                  }} className={showPopup ? 'recording' : ''} title="Voice input" disabled={isWaiting || isSessionExpired}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                  </button>
+                  <button onClick={sendMessage} title="Send message" disabled={isWaiting || isSessionExpired}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
