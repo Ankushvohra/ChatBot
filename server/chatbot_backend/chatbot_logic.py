@@ -36,10 +36,10 @@ def invoke_bedrock_agent(user_message, session_id):
     
     try:
         response = bedrock_agent.invoke_agent(
-            # agentId="YQJCBMODNB",
-            # agentAliasId="E0OUO8GNO5",
-            agentId="K0FCK2QXIU",
-            agentAliasId="NOIK0DHSAW",
+            agentId="YQJCBMODNB",
+            agentAliasId="E0OUO8GNO5",
+            #agentId="K0FCK2QXIU",
+            #agentAliasId="NOIK0DHSAW",
             sessionId=session_id,
             inputText=user_message
         )

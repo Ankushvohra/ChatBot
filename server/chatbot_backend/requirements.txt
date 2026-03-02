@@ -4,3 +4,4 @@ supabase
 flask
 flask-cors
 pyjwt
+matplotlib
