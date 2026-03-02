@@ -491,6 +491,9 @@ const AgentDashboard = () => {
                     appendMessage('--- User is now live ---', 'bot');
                   } else if (data.type === 'user_message') {
                     appendMessage('User: ' + data.message, 'bot');
+                  } else if (data.type === 'user_disconnected') {
+                    appendMessage('System: ' + data.message, 'bot');
+                    currentSessionId = null; // Clear current session
                   } else if (data.type === 'agent_connected' || data.type === 'stats_update') {
                     document.getElementById('activeCount').textContent = data.activeCount || 0;
                     document.getElementById('queueCount').textContent = data.queueCount || 0;
