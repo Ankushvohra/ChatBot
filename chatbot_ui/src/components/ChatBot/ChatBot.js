@@ -36,6 +36,8 @@ const ChatBot = () => {
   const [sessionId] = useState(() => crypto.randomUUID());
   const inactivityTimerRef = useRef(null);
   const SESSION_TIMEOUT = 300000; // 300 seconds
+  const [showVisualizationDropdown, setShowVisualizationDropdown] = useState(false);
+  const [visualizationMode, setVisualizationMode] = useState('none');
 
 
 
@@ -174,6 +176,47 @@ const ChatBot = () => {
     URL.revokeObjectURL(url);
   };
 
+  const downloadChart = (element, filename) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const rect = element.getBoundingClientRect();
+    
+    canvas.width = rect.width * 2;
+    canvas.height = rect.height * 2;
+    ctx.scale(2, 2);
+    
+    // White background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    
+    // Convert to image and download
+    const data = new XMLSerializer().serializeToString(element);
+    const img = new Image();
+    const svg = new Blob([data], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(svg);
+    
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(blob => {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+    };
+    img.src = url;
+  };
+
+  const downloadTableAsCSV = (months, costs, filename) => {
+    const csvContent = 'Month,Cost\n' + months.map((month, idx) => `"${month}","$${costs[idx].toLocaleString()}"`).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+  };
+
   const parseHtmlContent = (text) => {
     if (!text.includes('@@htmlstart@@')) return text;
     
@@ -188,20 +231,346 @@ const ChatBot = () => {
     });
   };
 
+  const extractDataFromHtml = (htmlContent) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const rows = doc.querySelectorAll('tr');
+    let months = [];
+    let costs = [];
+    
+    rows.forEach((row, index) => {
+      if (index === 0) return; // Skip header
+      const cells = row.querySelectorAll('td, th');
+      if (cells.length >= 2) {
+        const monthText = cells[0].textContent.trim();
+        const costText = cells[1].textContent.trim();
+        
+        const monthMatch = monthText.match(/(\d{4})\.(\d{2})/);
+        const costMatch = costText.match(/\$([\d,]+)/);
+        
+        if (monthMatch && costMatch) {
+          const year = monthMatch[1];
+          const monthNum = parseInt(monthMatch[2]);
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = monthNames[monthNum - 1];
+          
+          months.push(`${monthName} ${year}`);
+          costs.push(parseFloat(costMatch[1].replace(/,/g, '')));
+        }
+      }
+    });
+    
+    return { months, costs };
+  };
+
+  const renderVisualization = (text) => {
+    let months = [];
+    let costs = [];
+    
+    // Check if text contains HTML table
+    if (text.includes('<table')) {
+      const tableMatch = text.match(/<table[\s\S]*?<\/table>/i);
+      if (tableMatch) {
+        const extracted = extractDataFromHtml(tableMatch[0]);
+        months = extracted.months;
+        costs = extracted.costs;
+      }
+    } else {
+      // Pattern for markdown table format: "2025.12 | $91" or regular format "2025.12 $91"
+      const tableMatches = text.match(/(\d{4})\.(\d{2})\s*\|?\s*\$([\d,]+)/g);
+      
+      if (tableMatches && tableMatches.length > 0) {
+        tableMatches.forEach(match => {
+          const parts = match.match(/(\d{4})\.(\d{2})\s*\|?\s*\$([\d,]+)/);
+          if (parts) {
+            const year = parts[1];
+            const monthNum = parseInt(parts[2]);
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthName = monthNames[monthNum - 1];
+            
+            months.push(`${monthName} ${year}`);
+            costs.push(parseFloat(parts[3].replace(/,/g, '')));
+          }
+        });
+      }
+    }
+    
+    if (visualizationMode === 'table') {
+      return (
+        <div className="data-table">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h4 style={{ margin: 0 }}>Data Table</h4>
+            <button 
+              className="download-btn"
+              onClick={() => downloadTableAsCSV(months, costs, 'cost-data.csv')}
+            >
+              📥 Download CSV
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Month</th><th>Cost</th></tr>
+            </thead>
+            <tbody>
+              {months.map((month, idx) => (
+                <tr key={idx}>
+                  <td>{month}</td>
+                  <td>${costs[idx].toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    
+    if (visualizationMode === 'bar') {
+      const maxCost = Math.max(...costs);
+      return (
+        <div className="bar-chart">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h4 style={{ margin: 0 }}>Monthly Cloud Costs</h4>
+            <button 
+              className="download-btn"
+              onClick={() => {
+                const element = document.querySelector('.bar-chart');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = 600;
+                canvas.height = 400;
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 600, 400);
+                
+                // Simple bar chart drawing
+                ctx.fillStyle = '#9333ea';
+                ctx.font = '14px Arial';
+                const maxCost = Math.max(...costs);
+                
+                months.forEach((month, idx) => {
+                  const barHeight = (costs[idx] / maxCost) * 300;
+                  const x = 50 + idx * 80;
+                  const y = 350 - barHeight;
+                  
+                  ctx.fillRect(x, y, 60, barHeight);
+                  ctx.fillStyle = 'black';
+                  ctx.fillText(month, x, 380);
+                  ctx.fillText(`$${costs[idx].toLocaleString()}`, x, y - 10);
+                  ctx.fillStyle = '#9333ea';
+                });
+                
+                canvas.toBlob(blob => {
+                  const link = document.createElement('a');
+                  link.download = 'bar-chart.png';
+                  link.href = URL.createObjectURL(blob);
+                  link.click();
+                });
+              }}
+            >
+              📥 Download PNG
+            </button>
+          </div>
+          {months.map((month, idx) => (
+            <div key={idx} className="bar-item">
+              <span className="bar-label">{month}</span>
+              <div className="bar-container">
+                <div 
+                  className="bar" 
+                  style={{ width: `${(costs[idx] / maxCost) * 100}%` }}
+                ></div>
+                <span className="bar-value">${costs[idx].toLocaleString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    if (visualizationMode === 'pie') {
+      const nonZeroCosts = costs.filter(c => c > 0);
+      const nonZeroMonths = months.filter((m, i) => costs[i] > 0);
+      const total = nonZeroCosts.reduce((a, b) => a + b, 0);
+      
+      let currentAngle = 0;
+      const slices = nonZeroCosts.map((cost, idx) => {
+        const percentage = (cost / total) * 100;
+        const angle = (cost / total) * 360;
+        const startAngle = currentAngle;
+        const endAngle = currentAngle + angle;
+        currentAngle += angle;
+        
+        const radius = 80;
+        const centerX = 100;
+        const centerY = 100;
+        
+        const startAngleRad = (startAngle * Math.PI) / 180;
+        const endAngleRad = (endAngle * Math.PI) / 180;
+        
+        const x1 = centerX + radius * Math.cos(startAngleRad);
+        const y1 = centerY + radius * Math.sin(startAngleRad);
+        const x2 = centerX + radius * Math.cos(endAngleRad);
+        const y2 = centerY + radius * Math.sin(endAngleRad);
+        
+        const largeArcFlag = angle > 180 ? 1 : 0;
+        
+        const pathData = [
+          `M ${centerX} ${centerY}`,
+          `L ${x1} ${y1}`,
+          `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+          'Z'
+        ].join(' ');
+        
+        return {
+          pathData,
+          percentage: percentage.toFixed(1),
+          month: nonZeroMonths[idx],
+          color: `color-${idx}`
+        };
+      });
+      
+      return (
+        <div className="pie-chart">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h4 style={{ margin: 0 }}>Cost Distribution</h4>
+            <button 
+              className="download-btn"
+              onClick={() => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = 600;
+                canvas.height = 500;
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 600, 500);
+                
+                // Draw pie chart on canvas
+                const centerX = 200;
+                const centerY = 200;
+                const radius = 120;
+                
+                let currentAngle = 0;
+                const colors = ['#9333ea', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
+                
+                nonZeroCosts.forEach((cost, idx) => {
+                  const angle = (cost / total) * 2 * Math.PI;
+                  
+                  ctx.beginPath();
+                  ctx.moveTo(centerX, centerY);
+                  ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
+                  ctx.closePath();
+                  ctx.fillStyle = colors[idx % colors.length];
+                  ctx.fill();
+                  ctx.strokeStyle = 'white';
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                  
+                  // Add labels on slices
+                  const labelAngle = currentAngle + angle / 2;
+                  const labelX = centerX + Math.cos(labelAngle) * (radius * 0.7);
+                  const labelY = centerY + Math.sin(labelAngle) * (radius * 0.7);
+                  
+                  ctx.fillStyle = 'white';
+                  ctx.font = 'bold 12px Arial';
+                  ctx.textAlign = 'center';
+                  const percentage = ((cost / total) * 100).toFixed(1);
+                  ctx.fillText(`${percentage}%`, labelX, labelY);
+                  
+                  currentAngle += angle;
+                });
+                
+                // Add title
+                ctx.fillStyle = 'black';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Cost Distribution', 300, 30);
+                
+                // Add legend
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'left';
+                nonZeroMonths.forEach((month, idx) => {
+                  const y = 80 + idx * 25;
+                  
+                  // Color box
+                  ctx.fillStyle = colors[idx % colors.length];
+                  ctx.fillRect(420, y - 10, 15, 15);
+                  
+                  // Text
+                  ctx.fillStyle = 'black';
+                  ctx.fillText(`${month}: $${nonZeroCosts[idx].toLocaleString()}`, 445, y + 2);
+                });
+                
+                canvas.toBlob(blob => {
+                  const link = document.createElement('a');
+                  link.download = 'pie-chart.png';
+                  link.href = URL.createObjectURL(blob);
+                  link.click();
+                });
+              }}
+            >
+              📥 Download PNG
+            </button>
+          </div>
+          <div className="pie-container">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              {slices.map((slice, idx) => (
+                <path
+                  key={idx}
+                  d={slice.pathData}
+                  className={`pie-slice ${slice.color}`}
+                  stroke="white"
+                  strokeWidth="2"
+                />
+              ))}
+            </svg>
+            <div className="pie-legend">
+              {slices.map((slice, idx) => (
+                <div key={idx} className="legend-item">
+                  <div className={`legend-color ${slice.color}`}></div>
+                  <span>{slice.month}: {slice.percentage}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   const renderMessageContent = (text) => {
     const parsedText = parseHtmlContent(text);
     
+    // Check if this message contains cost data
+    const hasCostData = text.toLowerCase().includes('cost') || 
+                       text.includes('$') || 
+                       text.toLowerCase().includes('breakdown') ||
+                       text.toLowerCase().includes('expense') ||
+                       text.toLowerCase().includes('billing') ||
+                       text.toLowerCase().includes('month') ||
+                       text.toLowerCase().includes('provider');
+    
     if (parsedText.includes('<table')) {
       const parts = parsedText.split(/(<table[\s\S]*?<\/table>)/g);
-      return parts.map((part, index) => {
-        if (part.includes('<table')) {
-          return <div key={index} dangerouslySetInnerHTML={{ __html: part }} />;
-        }
-        return part ? <span key={index}>{part}</span> : null;
-      }).filter(Boolean);
+      return (
+        <div>
+          {parts.map((part, index) => {
+            if (part.includes('<table')) {
+              return <div key={index} dangerouslySetInnerHTML={{ __html: part }} />;
+            }
+            return part ? <span key={index}>{part}</span> : null;
+          }).filter(Boolean)}
+          {hasCostData && visualizationMode !== 'none' && renderVisualization(parsedText)}
+        </div>
+      );
     }
     
-    return <span>{parsedText}</span>;
+    return (
+      <div>
+        <span>{parsedText}</span>
+        {hasCostData && visualizationMode !== 'none' && renderVisualization(parsedText)}
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -489,6 +858,55 @@ const ChatBot = () => {
               <button onClick={() => setIsOpen(false)} title="Minimize">−</button>
               <button onClick={() => setShowCloseConfirmModal(true)} title="Close">✕</button>
             </div>
+          </div>
+          
+          <div className="visualization-dropdown-container">
+            <button 
+              className="visualization-dropdown-btn"
+              onClick={() => setShowVisualizationDropdown(!showVisualizationDropdown)}
+            >
+              📊 Visualize Data ▼
+            </button>
+            {showVisualizationDropdown && (
+              <div className="visualization-dropdown">
+                <div 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setVisualizationMode('none');
+                    setShowVisualizationDropdown(false);
+                  }}
+                >
+                  📄 Default
+                </div>
+                <div 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setVisualizationMode('table');
+                    setShowVisualizationDropdown(false);
+                  }}
+                >
+                  📋 Table
+                </div>
+                <div 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setVisualizationMode('bar');
+                    setShowVisualizationDropdown(false);
+                  }}
+                >
+                  📊 Bar Chart
+                </div>
+                <div 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setVisualizationMode('pie');
+                    setShowVisualizationDropdown(false);
+                  }}
+                >
+                  🥧 Pie Chart
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="chat-messages">
