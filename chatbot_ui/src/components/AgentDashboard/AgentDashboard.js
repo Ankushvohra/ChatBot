@@ -483,7 +483,12 @@ const AgentDashboard = () => {
                   
                   if (data.type === 'user_connected') {
                     currentSessionId = data.sessionId;
-                    appendMessage('System: User connected - ' + data.sessionId, 'bot');
+                    appendMessage('--- Chat history ---', 'bot');
+                    (data.history || []).forEach(function(entry) {
+                      var label = entry.sender === 'user' ? 'User' : entry.sender === 'bot' ? 'Bot' : 'Agent';
+                      appendMessage(label + ': ' + entry.message, entry.sender === 'user' ? 'user' : 'bot');
+                    });
+                    appendMessage('--- User is now live ---', 'bot');
                   } else if (data.type === 'user_message') {
                     appendMessage('User: ' + data.message, 'bot');
                   } else if (data.type === 'agent_connected' || data.type === 'stats_update') {

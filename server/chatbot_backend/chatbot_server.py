@@ -183,6 +183,15 @@ async def handler(websocket):
                     await websocket.send(json.dumps({"type": "agent_ack"}))
                     continue
 
+                # If user is in queue, don't call Bedrock
+                if session_id and session_id in user_queue:
+                    position = user_queue.index(session_id) + 1
+                    await websocket.send(json.dumps({
+                        "type": "response",
+                        "message": f"You are still #{position} in queue. Please wait for an agent..."
+                    }))
+                    continue
+
                 intent = detect_intent(user_message)
 
                 if intent == "human_agent":
@@ -202,8 +211,18 @@ async def handler(websocket):
                             "type": "response",
                             "message": f"All agents are busy. You are #{position} in queue. Please wait..."
                         }))
+                        # Notify all agents about updated queue
+                        for aid, aws in all_agents.items():
+                            await aws.send(json.dumps({
+                                "type": "stats_update",
+                                "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent")]),
+                                "queueCount": len(user_queue),
+                                "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                            }))
                 else:
                     response = handle_intent(intent, user_message, session_id)
+                    if session_id and session_id in user_sessions:
+                        user_sessions[session_id]["history"].append({"sender": "bot", "message": response.get("response", "")})
                     await websocket.send(json.dumps(response))
 
     except websockets.exceptions.ConnectionClosed:
