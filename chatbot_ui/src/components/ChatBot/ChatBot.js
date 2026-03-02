@@ -213,6 +213,15 @@ const ChatBot = () => {
     setShowFeedbackButtons(false);
   };
 
+  // Helper function to check if user is connected to agent
+  const isConnectedToAgent = () => {
+    return messages.some(msg => 
+      msg.text && msg.text.includes('You are now connected to a live agent')
+    ) && !messages.some(msg => 
+      msg.text && (msg.text.includes('Chat has been ended') || msg.text.includes('Thank you for your feedback'))
+    );
+  };
+
   const endChat = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
@@ -727,12 +736,22 @@ const ChatBot = () => {
           
           {showCloseConfirmModal && (
             <div className="session-expired-modal">
-              <div className="modal-content" style={{ maxWidth: '250px', padding: '20px' }}>
+              <div className="modal-content" style={{ maxWidth: '300px', padding: '20px' }}>
                 <h3 style={{ fontSize: '16px', margin: '0 0 15px 0' }}>Would you like to end session?</h3>
+                {isConnectedToAgent() && (
+                  <p style={{ fontSize: '14px', color: '#dc2626', margin: '10px 0', textAlign: 'center' }}>
+                    You are currently connected to a live agent. Ending the session will disconnect you from the agent.
+                  </p>
+                )}
                 <div style={{ display: 'flex', gap: '20px', marginTop: '15px', justifyContent: 'center' }}>
                   <button onClick={() => {
                     if (ws && ws.readyState === WebSocket.OPEN) {
-                      ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
+                      // Send user disconnect message if connected to agent
+                      if (isConnectedToAgent()) {
+                        ws.send(JSON.stringify({ type: 'user_disconnect', sessionId }));
+                      } else {
+                        ws.send(JSON.stringify({ type: 'disconnect', sessionId }));
+                      }
                       ws.close();
                       setWs(null);
                     }

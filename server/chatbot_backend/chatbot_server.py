@@ -156,6 +156,38 @@ async def handler(websocket):
                         # Remove from available agents if busy/offline
                         available_agents.pop(agent_id, None)
 
+            # --- User disconnect ---
+            elif msg_type == "user_disconnect":
+                if session_id and session_id in user_sessions:
+                    paired_agent = user_sessions[session_id].get("paired_agent")
+                    if paired_agent:
+                        # Notify agent that user disconnected
+                        if paired_agent in all_agents:
+                            await all_agents[paired_agent].send(json.dumps({
+                                "type": "user_disconnected",
+                                "sessionId": session_id,
+                                "message": "User has disconnected from the chat"
+                            }))
+                        
+                        # Make agent available again
+                        if paired_agent in agent_status:
+                            agent_status[paired_agent] = "available"
+                            if paired_agent in all_agents:
+                                available_agents[paired_agent] = all_agents[paired_agent]
+                        
+                        # Update stats for all agents
+                        for aid, aws in all_agents.items():
+                            await aws.send(json.dumps({
+                                "type": "stats_update",
+                                "activeCount": len([s for s in user_sessions.values() if s.get("paired_agent") and s != user_sessions[session_id]]),
+                                "queueCount": len(user_queue),
+                                "queue": [{"id": s, "waiting_time": "2 min"} for s in user_queue]
+                            }))
+                    
+                    # Remove user session
+                    user_sessions.pop(session_id, None)
+                break
+
             # --- User feedback response ---
             elif msg_type == "feedback_response":
                 feedback = data.get("resolved")  # true or false
