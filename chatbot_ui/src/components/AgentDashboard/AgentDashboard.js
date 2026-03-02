@@ -481,7 +481,9 @@ const AgentDashboard = () => {
                     return;
                   }
                   
-                  if (data.type === 'user_connected') {
+                  if (data.type === 'clear_chat') {
+                    document.getElementById('chatMessages').innerHTML = '';
+                  } else if (data.type === 'user_connected') {
                     currentSessionId = data.sessionId;
                     appendMessage('--- Chat history ---', 'bot');
                     (data.history || []).forEach(function(entry) {
@@ -498,14 +500,25 @@ const AgentDashboard = () => {
                     // Update queue display
                     const queueContainer = document.getElementById('customerQueue');
                     if (data.queue && data.queue.length > 0) {
-                      queueContainer.innerHTML = data.queue.map(customer => 
-                        '<div style="padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 4px; font-size: 12px;">' +
-                          '<strong>Customer:</strong> ' + customer.id.substring(0, 8) + '...<br>' +
-                          '<span style="color: #666;">Waiting: ' + customer.waiting_time + '</span>' +
-                        '</div>'
-                      ).join('');
+                      queueContainer.innerHTML = 
+                        '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 8px; background: #f0f9ff; border-radius: 4px;">' +
+                          '<span style="font-size: 12px; color: #666;">Next in queue: ' + data.queue[0].id.substring(0, 8) + '...</span>' +
+                          '<button id="connectNextBtn" onclick="connectNext()" style="background: #9333ea; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" disabled>Connect Next</button>' +
+                        '</div>' +
+                        data.queue.map(customer => 
+                          '<div style="padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 4px; font-size: 12px;">' +
+                            '<strong>Customer:</strong> ' + customer.id.substring(0, 8) + '...<br>' +
+                            '<span style="color: #666;">Waiting: ' + customer.waiting_time + '</span>' +
+                          '</div>'
+                        ).join('');
                     } else {
                       queueContainer.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No customers in queue</div>';
+                    }
+                    
+                    // Enable/disable button based on agent availability
+                    const connectBtn = document.getElementById('connectNextBtn');
+                    if (connectBtn) {
+                      connectBtn.disabled = currentSessionId !== null; // Disable if agent is busy
                     }
                   }
                 };
@@ -556,11 +569,21 @@ const AgentDashboard = () => {
                 input.value = suggestions[type] || '';
               };
               
+              window.connectNext = function() {
+                if (ws && ws.readyState === WebSocket.OPEN && !currentSessionId) {
+                  ws.send(JSON.stringify({ type: 'manual_connect' }));
+                }
+              };
+              
               window.endChat = function() {
                 if (currentSessionId && ws && ws.readyState === WebSocket.OPEN) {
                   ws.send(JSON.stringify({ type: 'end_chat', sessionId: currentSessionId }));
                   appendMessage('System: Chat ended by agent', 'bot');
                   currentSessionId = null;
+                  
+                  // Enable connect button
+                  const connectBtn = document.getElementById('connectNextBtn');
+                  if (connectBtn) connectBtn.disabled = false;
                 }
               };
               
