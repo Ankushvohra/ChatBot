@@ -1,7 +1,4 @@
 websockets
 boto3
-supabase
 flask
 flask-cors
-pyjwt
-matplotlib

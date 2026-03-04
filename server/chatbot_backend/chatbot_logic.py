@@ -9,7 +9,8 @@ import time
 # bedrock_agent = boto3.client('bedrock-agent-runtime')
 
 # Initialize Bedrock agent client with profile
-session = boto3.Session(profile_name="core-sandbox1", region_name="us-east-1")
+# session = boto3.Session(profile_name="core-sandbox1", region_name="us-east-1")
+session = boto3.Session(region_name="us-east-1")
 bedrock_agent = session.client('bedrock-agent-runtime')
 
 
