@@ -322,11 +322,7 @@ const AgentDashboard = () => {
               <div class="error-message" id="errorMessage"></div>
               <button type="submit" class="login-btn" id="loginBtn">Login</button>
             </form>
-            <div class="demo-credentials">
-              <p><strong>Demo Accounts:</strong></p>
-              <p>Admin: admin@company.com / Admin123!</p>
-              <p>Agent: agent1@company.com / Agent123!</p>
-            </div>
+
           </div>
           
           <script>
@@ -427,24 +423,8 @@ const AgentDashboard = () => {
                   </div>
 
                   <div class="right-panel">
-                    <div class="panel-title">AI Agent Assistant</div>
-                    <div class="ai-suggestions">
-                      <div class="suggestion-item" onclick="applySuggestion('greeting')">
-                        <div class="suggestion-title">Greeting Template</div>
-                        <div class="suggestion-text">Hello! How can I assist you today?</div>
-                      </div>
-                      <div class="suggestion-item" onclick="applySuggestion('leave_policy')">
-                        <div class="suggestion-title">Leave Policy Info</div>
-                        <div class="suggestion-text">Employees get 20 paid leaves annually...</div>
-                      </div>
-                      <div class="suggestion-item" onclick="applySuggestion('escalate')">
-                        <div class="suggestion-title">Escalation</div>
-                        <div class="suggestion-text">Let me connect you with a supervisor...</div>
-                      </div>
-                    </div>
+                    <div class="panel-title">Actions</div>
                     <div class="action-buttons">
-                      <button class="action-btn" onclick="transferChat()">Transfer</button>
-                      <button class="action-btn" onclick="escalateChat()">Escalate</button>
                       <button class="action-btn" onclick="endChat()">End Chat</button>
                     </div>
                   </div>
@@ -562,16 +542,6 @@ const AgentDashboard = () => {
                 }
               };
               
-              window.applySuggestion = function(type) {
-                const input = document.getElementById('messageInput');
-                const suggestions = {
-                  greeting: 'Hello! How can I assist you today?',
-                  leave_policy: 'Employees get 20 paid leaves annually.',
-                  escalate: 'Let me connect you with a supervisor.'
-                };
-                input.value = suggestions[type] || '';
-              };
-              
               window.connectNext = function() {
                 if (ws && ws.readyState === WebSocket.OPEN && !currentSessionId) {
                   ws.send(JSON.stringify({ type: 'manual_connect' }));
@@ -589,9 +559,6 @@ const AgentDashboard = () => {
                   if (connectBtn) connectBtn.disabled = false;
                 }
               };
-              
-              window.transferChat = function() { alert('Transfer initiated'); };
-              window.escalateChat = function() { alert('Escalated to supervisor'); };
               
               initWebSocket();
             }
