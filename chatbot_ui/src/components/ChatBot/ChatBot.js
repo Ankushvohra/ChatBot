@@ -536,7 +536,7 @@ const ChatBot = () => {
     return null;
   };
 
-  const renderMessageContent = (text) => {
+  const renderMessageContent = (text, sender) => {
     const parsedText = parseHtmlContent(text);
     
     // Check if this message contains cost data
@@ -558,7 +558,7 @@ const ChatBot = () => {
             }
             return part ? <span key={index}>{part}</span> : null;
           }).filter(Boolean)}
-          {hasCostData && visualizationMode !== 'none' && renderVisualization(parsedText)}
+          {sender === 'bot' && hasCostData && visualizationMode !== 'none' && renderVisualization(parsedText)}
         </div>
       );
     }
@@ -566,7 +566,7 @@ const ChatBot = () => {
     return (
       <div>
         <span>{parsedText}</span>
-        {hasCostData && visualizationMode !== 'none' && renderVisualization(parsedText)}
+        {sender === 'bot' && hasCostData && visualizationMode !== 'none' && renderVisualization(parsedText)}
       </div>
     );
   };
@@ -993,7 +993,7 @@ const ChatBot = () => {
                 )}
                 {msg.sender !== 'system' && (
                   <>
-                    <div>{renderMessageContent(msg.text)}</div>
+                    <div>{renderMessageContent(msg.text, msg.sender)}</div>
                     {msg.file && (
                       <div className="file-download">
                         <button 
