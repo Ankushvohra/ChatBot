@@ -2,15 +2,10 @@ import boto3
 import os
 import time
 
-# aws_profile = os.getenv('AWS_PROFILE', 'core-sandbox1')
-# aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
-
-# # Initialize Bedrock agent client
-# bedrock_agent = boto3.client('bedrock-agent-runtime')
 
 # Initialize Bedrock agent client with profile
-# session = boto3.Session(profile_name="core-sandbox1", region_name="us-east-1")
-session = boto3.Session(region_name="us-east-1")
+session = boto3.Session(profile_name="core-sandbox1", region_name="us-east-1")
+# session = boto3.Session(region_name="us-east-1")
 bedrock_agent = session.client('bedrock-agent-runtime')
 
 
@@ -60,13 +55,8 @@ def invoke_bedrock_agent(user_message, session_id):
         return "Sorry, I'm having trouble processing your request right now."
 
 def handle_intent(intent, user_message="", session_id=None):
-    """Handle the detected intent"""
-    if intent == "human_agent":
-        return {
-            "response": "I understand you'd like to speak with a human agent. This feature will be available soon. For now, I can help you with your questions using AI assistance."
-        }
-    
-    elif intent == "bedrock":
+    """Handle the detected intent"""    
+    if intent == "bedrock":
         if not session_id:
             session_id = "default-session"
         bedrock_response = invoke_bedrock_agent(user_message, session_id)

@@ -1,4 +1,4 @@
 uid,email,password,name,role,active
 admin-001,admin@company.com,Admin123!,Admin User,admin,true
 agent-001,agent1@company.com,Agent123!,Agent One,agent,true
-agent-002,agent2@company.com,Agent123!,Agent Two,agent,true
+agent-002,agent2@company.com,Agent123!,Agent Two,agent,false
